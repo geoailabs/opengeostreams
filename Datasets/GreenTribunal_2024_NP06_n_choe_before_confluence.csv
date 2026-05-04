@@ -1,0 +1,16 @@
+SrNo,Parameter,Unit,Month,Year,Value,Data Source,Location,Latitude,Longitude
+1,pH,,,2024,7.3,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+2,COD,mg/l,,2024,156,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+3,BOD,mg/l,,2024,50,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+4,TSS,mg/l,,2024,81,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+5,TDS,mg/l,,2024,460,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+6,Conductivity,mg/l,,2024,983,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+7,Chloride,mg/l,,2024,75,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+8,Phosphate-P,mg/l,,2024,3,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+9,NO2-N,mg/l,,2024,0,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+10,NO3-N,mg/l,,2024,0,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+11,NH3-N,mg/l,,2024,26,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+12,SO4,mg/l,,2024,58,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+13,Colour,CU,,2024,0,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+14,TKN,mg/l,,2024,29,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+15,T-Coliform,MPN/100 ml,,2024,28x10^7,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388

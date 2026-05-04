@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-choe Water Quality Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  >
+  <link rel="stylesheet" href="./styles.css?v=20260420a">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <section class="hero-card hero-card-collapsible" id="hero-card">
+        <div class="hero-summary">
+          <div class="hero-summary-copy">
+            <p class="eyebrow">N-choe Basin</p>
+            <h1>N-choe River Dashboard</h1>
+            <p class="hero-teaser">
+              Seasonal urban drain-stream flowing through Chandigarh and Mohali before joining the Ghaggar.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-section about-panel">
+        <div class="section-heading">
+          <h2>About N-choe</h2>
+        </div>
+        <button type="button" id="about-open" class="about-open-button">Open Description</button>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-heading">
+          <h2>Parameters</h2>
+          <span id="parameter-unit" class="badge subtle">Unit</span>
+        </div>
+        <div id="parameter-tabs" class="tab-list" aria-label="Water quality parameters"></div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-heading">
+          <h2>Trend</h2>
+          <span id="value-summary" class="badge subtle">No data</span>
+        </div>
+        <div class="trend-chart-shell">
+          <canvas id="trend-chart" class="trend-chart" role="img" aria-label="Trend chart"></canvas>
+          <div id="trend-empty" class="trend-empty is-hidden" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-heading">
+          <h2>Precipitation Trend</h2>
+          <span id="weather-status" class="badge subtle">No data</span>
+        </div>
+        <div class="trend-chart-shell">
+          <canvas id="weather-chart" class="trend-chart" role="img" aria-label="Monthly precipitation chart"></canvas>
+          <div id="weather-empty" class="trend-empty is-hidden" aria-live="polite"></div>
+        </div>
+        <p class="section-copy">Monthly precipitation from the historical weather API for the selected point and year filter.</p>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-heading">
+          <h2>Stream Visualization</h2>
+          <span id="stream-status" class="badge subtle">Select parameter</span>
+        </div>
+        <div id="stream-visualization" class="stream-viz-shell" aria-live="polite"></div>
+      </section>
+
+    </aside>
+
+    <main class="map-area">
+      <div class="map-toolbar">
+        <div class="map-toolbar-copy">
+          <p class="eyebrow">Interactive Map</p>
+          <h2>Sampling points across the N-choe study area</h2>
+          <section class="suitability-panel" aria-label="Suitability screening">
+            <div class="suitability-panel-heading">
+              <h3>Use-case screening</h3>
+              <div class="suitability-summary-group">
+                <span id="suitability-summary" class="suitability-summary">Checking latest filtered sample across mapped stations.</span>
+                <span id="suitability-detail" class="suitability-detail">Confirmed checks, proxy checks, and missing checks will appear for the selected station.</span>
+              </div>
+            </div>
+            <div id="use-case-tabs" class="use-case-tabs" aria-label="Suitability use cases"></div>
+            <div class="suitability-legend" aria-label="Suitability color meaning">
+              <span class="suitability-legend-item"><span class="suitability-swatch suitability-swatch-safe"></span> Pass</span>
+              <span class="suitability-legend-item"><span class="suitability-swatch suitability-swatch-caution"></span> Caution</span>
+              <span class="suitability-legend-item"><span class="suitability-swatch suitability-swatch-unsafe"></span> Fail</span>
+              <span class="suitability-legend-item"><span class="suitability-swatch suitability-swatch-unknown"></span> Insufficient data</span>
+            </div>
+          </section>
+        </div>
+        <div id="basemap-toggle" class="basemap-toggle" aria-label="Base map switcher">
+          <button type="button" class="basemap-button is-active" data-basemap="osm">OSM</button>
+          <button type="button" class="basemap-button" data-basemap="minimal">Minimal</button>
+          <button type="button" class="basemap-button" data-basemap="satellite">Satellite</button>
+        </div>
+        <div class="toolbar-stats">
+          <div class="stat-card">
+            <span class="stat-value" id="mapped-count">0</span>
+            <span class="stat-label">Mapped locations</span>
+          </div>
+          <section id="parameter-scale" class="parameter-scale-card" aria-label="Selected parameter safety scale"></section>
+        </div>
+      </div>
+
+      <div id="map" class="map-canvas" aria-label="Map of water quality stations"></div>
+
+      <section id="period-panel" class="period-panel" aria-label="Month and annual filters">
+        <div class="section-heading period-panel-heading">
+          <h2>Timeline</h2>
+        </div>
+        <div id="period-filter" class="period-filter"></div>
+        <div class="year-filter-shell">
+          <div class="year-filter-heading">
+            <h3>Years</h3>
+          </div>
+          <div id="year-filter" class="period-filter"></div>
+        </div>
+      </section>
+
+      <div class="legend-card">
+        <div><span class="legend-dot"></span> General sampling location</div>
+        <div><span class="legend-dot legend-dot-stp"></span> Sewage treatment plant</div>
+        <div><span class="legend-dot legend-dot-safe"></span> Passes all checked rules for the selected use case</div>
+        <div><span class="legend-dot legend-dot-caution"></span> Passes core rules but triggers extended cautions</div>
+        <div><span class="legend-dot legend-dot-unsafe"></span> Fails one or more core rules</div>
+        <div><span class="legend-dot legend-dot-unknown"></span> Not enough matching data for the selected filter</div>
+        <div class="legend-note-copy">Click a marker to switch the left panel to that station and inspect the trend by parameter.</div>
+        <div id="map-note" class="legend-note"></div>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="about-dialog" class="about-dialog">
+    <div class="about-dialog-card">
+      <div class="section-heading">
+        <h2>About N-choe</h2>
+        <button type="button" id="about-close" class="about-close-button" aria-label="Close description">Close</button>
+      </div>
+      <p class="section-copy">
+        Explore station-wise measurements, scrub through the timeline, and compare parameter trends across the mapped sampling locations.
+      </p>
+      <p class="section-copy">
+        N-choe is a seasonal urban drain-stream system flowing through Chandigarh and Mohali before joining the Ghaggar, making it an important corridor for tracking wastewater influence and downstream water quality.
+      </p>
+    </div>
+  </dialog>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="./dashboard-data.js?v=20260414d"></script>
+  <script src="./app.js?v=20260420a"></script>
+  <script>
+    (function () {
+      var dialog = document.getElementById('about-dialog');
+      var openButton = document.getElementById('about-open');
+      var closeButton = document.getElementById('about-close');
+      if (!dialog || !openButton || !closeButton) return;
+
+      openButton.addEventListener('click', function () {
+        if (typeof dialog.showModal === 'function') {
+          dialog.showModal();
+        } else {
+          dialog.setAttribute('open', 'open');
+        }
+      });
+
+      closeButton.addEventListener('click', function () {
+        if (typeof dialog.close === 'function') {
+          dialog.close();
+        } else {
+          dialog.removeAttribute('open');
+        }
+      });
+
+      dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) {
+          if (typeof dialog.close === 'function') {
+            dialog.close();
+          } else {
+            dialog.removeAttribute('open');
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

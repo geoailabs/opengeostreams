@@ -1,0 +1,16 @@
+SrNo,Parameter,Unit,Month,Year,Value,Data Source,Location,Latitude,Longitude
+1,pH,,,2024,7.6,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+2,COD,mg/l,,2024,90,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+3,BOD,mg/l,,2024,28,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+4,TSS,mg/l,,2024,23,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+5,TDS,mg/l,,2024,380,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+6,Conductivity,mg/l,,2024,815,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+7,Chloride,mg/l,,2024,46,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+8,Phosphate-P,mg/l,,2024,0.7,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+9,NO2-N,mg/l,,2024,0.06,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+10,NO3-N,mg/l,,2024,0,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+11,NH3-N,mg/l,,2024,7,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+12,SO4,mg/l,,2024,72,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+13,Colour,CU,,2024,0,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+14,TKN,mg/l,,2024,9,Green tribunal,NCC01 - Sector 36,30.73082,76.751379
+15,T-Coliform,MPN/100 ml,,2024,35x10^4,Green tribunal,NCC01 - Sector 36,30.73082,76.751379

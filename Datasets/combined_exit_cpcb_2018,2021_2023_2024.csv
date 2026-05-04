@@ -1,0 +1,374 @@
+SrNo,Parameter,Unit,Month,Year,Value,Data Source,Latitude,Longitude,Location
+1,pH,-,Jan,2018,6.6,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+2,Conductivity,µs/cm,Jan,2018,644.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+3,DO,mg/l,Jan,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+4,COD,mg/l,Jan,2018,261.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+5,BOD,mg/l,Jan,2018,161.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+6,NO3-N,mg/l,Jan,2018,5.9,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+7,NH3-N,mg/l,Jan,2018,23.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+8,Phosphate,mg/l,Jan,2018,2.55,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+9,TSS,mg/l,Jan,2018,100.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+10,TDS,mg/l,Jan,2018,326.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+11,FS,mg/l,Jan,2018,267.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+12,Turbidity,NTU,Jan,2018,110.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+13,TH as CaCO3,mg/l,Jan,2018,190.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+14,Ca as CaCO3,mg/l,Jan,2018,118.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+15,Mg as CaCO3,mg/l,Jan,2018,72.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+16,Sulphate,mg/l,Jan,2018,66.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+17,Chloride,mg/l,Jan,2018,42.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+18,Total alkalinity as CaCO3,mg/l,Jan,2018,260.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+19,P-Alkalinity,mg/l,Jan,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+20,Fluoride,mg/l,Jan,2018,0.28,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+21,Colour,Hazen,Jan,2018,30.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+22,Boron(B),mg/l,Jan,2018,0.19,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+23,TKN,mg/l,Jan,2018,4.2,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+24,Potassium,mg/l,Jan,2018,7.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+25,Sodium,mg/l,Jan,2018,23.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+26,Total Coliform,MPN/100ml,Jan,2018,2.2E+4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+27,Faecal Coliform,MPN/100ml,Jan,2018,1.8E+4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+28,pH,-,Feb,2018,6.9,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+29,Conductivity,µs/cm,Feb,2018,551.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+30,DO,mg/l,Feb,2018,0.6,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+31,COD,mg/l,Feb,2018,261.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+32,BOD,mg/l,Feb,2018,117.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+33,NO3-N,mg/l,Feb,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+34,NH3-N,mg/l,Feb,2018,17.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+35,Phosphate,mg/l,Feb,2018,2.05,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+36,TSS,mg/l,Feb,2018,149.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+37,TDS,mg/l,Feb,2018,259.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+38,FS,mg/l,Feb,2018,269.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+39,Turbidity,NTU,Feb,2018,160.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+40,TH as CaCO3,mg/l,Feb,2018,206.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+41,Ca as CaCO3,mg/l,Feb,2018,100.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+42,Mg as CaCO3,mg/l,Feb,2018,106.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+43,Sulphate,mg/l,Feb,2018,72.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+44,Chloride,mg/l,Feb,2018,45.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+45,Total alkalinity as CaCO3,mg/l,Feb,2018,208.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+46,P-Alkalinity,mg/l,Feb,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+47,Fluoride,mg/l,Feb,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+48,Colour,Hazen,Feb,2018,20.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+49,Boron(B),mg/l,Feb,2018,0.21,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+50,TKN,mg/l,Feb,2018,4.7,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+51,Potassium,mg/l,Feb,2018,9.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+52,Sodium,mg/l,Feb,2018,27.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+53,Total Coliform,MPN/100ml,Feb,2018,3.2E+4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+54,Faecal Coliform,MPN/100ml,Feb,2018,2E+4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+55,pH,-,March,2018,7.1,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+56,Conductivity,µs/cm,March,2018,668.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+57,DO,mg/l,March,2018,1.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+58,COD,mg/l,March,2018,214.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+59,BOD,mg/l,March,2018,98.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+60,NO3-N,mg/l,March,2018,2.4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+61,NH3-N,mg/l,March,2018,20.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+62,Phosphate,mg/l,March,2018,2.05,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+63,TSS,mg/l,March,2018,82.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+64,TDS,mg/l,March,2018,350.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+65,FS,mg/l,March,2018,236.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+66,Turbidity,NTU,March,2018,118.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+67,TH as CaCO3,mg/l,March,2018,230.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+68,Ca as CaCO3,mg/l,March,2018,120.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+69,Mg as CaCO3,mg/l,March,2018,110.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+70,Sulphate,mg/l,March,2018,49.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+71,Chloride,mg/l,March,2018,50.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+72,Total alkalinity as CaCO3,mg/l,March,2018,252.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+73,P-Alkalinity,mg/l,March,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+74,Fluoride,mg/l,March,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+75,Colour,Hazen,March,2018,20.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+76,Boron(B),mg/l,March,2018,0.15,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+77,TKN,mg/l,March,2018,4.2,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+78,Potassium,mg/l,March,2018,11.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+79,Sodium,mg/l,March,2018,37.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+80,Total Coliform,MPN/100ml,March,2018,1.4E+6,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+81,Faecal Coliform,MPN/100ml,March,2018,9.3E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+82,pH,-,April,2018,7.3,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+83,Conductivity,µs/cm,April,2018,663.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+84,DO,mg/l,April,2018,0.7,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+85,COD,mg/l,April,2018,176.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+86,BOD,mg/l,April,2018,80.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+87,NO3-N,mg/l,April,2018,2.1,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+88,NH3-N,mg/l,April,2018,17.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+89,Phosphate,mg/l,April,2018,2.36,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+90,TSS,mg/l,April,2018,81.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+91,TDS,mg/l,April,2018,394.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+92,FS,mg/l,April,2018,273.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+93,Turbidity,NTU,April,2018,125.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+94,TH as CaCO3,mg/l,April,2018,212.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+95,Ca as CaCO3,mg/l,April,2018,120.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+96,Mg as CaCO3,mg/l,April,2018,92.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+97,Sulphate,mg/l,April,2018,52.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+98,Chloride,mg/l,April,2018,45.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+99,Total alkalinity as CaCO3,mg/l,April,2018,258.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+100,P-Alkalinity,mg/l,April,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+101,Fluoride,mg/l,April,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+102,Colour,Hazen,April,2018,20.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+103,Boron(B),mg/l,April,2018,0.14,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+104,TKN,mg/l,April,2018,4.1,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+105,Potassium,mg/l,April,2018,8.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+106,Sodium,mg/l,April,2018,30.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+107,Total Coliform,MPN/100ml,April,2018,6.1E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+108,Faecal Coliform,MPN/100ml,April,2018,4.1E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+109,pH,-,May,2018,7.1,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+110,Conductivity,µs/cm,May,2018,643.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+111,DO,mg/l,May,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+112,COD,mg/l,May,2018,168.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+113,BOD,mg/l,May,2018,73.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+114,NO3-N,mg/l,May,2018,2.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+115,NH3-N,mg/l,May,2018,24.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+116,Phosphate,mg/l,May,2018,2.51,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+117,TSS,mg/l,May,2018,105.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+118,TDS,mg/l,May,2018,297.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+119,FS,mg/l,May,2018,310.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+120,Turbidity,NTU,May,2018,109.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+121,TH as CaCO3,mg/l,May,2018,220.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+122,Ca as CaCO3,mg/l,May,2018,124.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+123,Mg as CaCO3,mg/l,May,2018,96.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+124,Sulphate,mg/l,May,2018,52.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+125,Chloride,mg/l,May,2018,48.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+126,Total alkalinity as CaCO3,mg/l,May,2018,254.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+127,P-Alkalinity,mg/l,May,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+128,Fluoride,mg/l,May,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+129,Colour,Hazen,May,2018,20.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+130,Boron(B),mg/l,May,2018,0.14,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+131,TKN,mg/l,May,2018,3.9,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+132,Potassium,mg/l,May,2018,8.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+133,Sodium,mg/l,May,2018,24.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+134,Total Coliform,MPN/100ml,May,2018,2.2E+6,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+135,Faecal Coliform,MPN/100ml,May,2018,1.1E+6,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+136,pH,-,June,2018,6.9,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+137,Conductivity,µs/cm,June,2018,638.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+138,DO,mg/l,June,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+139,COD,mg/l,June,2018,141.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+140,BOD,mg/l,June,2018,65.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+141,NO3-N,mg/l,June,2018,2.2,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+142,NH3-N,mg/l,June,2018,18.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+143,Phosphate,mg/l,June,2018,1.83,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+144,TSS,mg/l,June,2018,82.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+145,TDS,mg/l,June,2018,317.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+146,FS,mg/l,June,2018,271.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+147,Turbidity,NTU,June,2018,95.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+148,TH as CaCO3,mg/l,June,2018,194.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+149,Ca as CaCO3,mg/l,June,2018,116.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+150,Mg as CaCO3,mg/l,June,2018,78.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+151,Sulphate,mg/l,June,2018,51.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+152,Chloride,mg/l,June,2018,46.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+153,Total alkalinity as CaCO3,mg/l,June,2018,246.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+154,P-Alkalinity,mg/l,June,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+155,Fluoride,mg/l,June,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+156,Colour,Hazen,June,2018,20.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+157,Boron(B),mg/l,June,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+158,TKN,mg/l,June,2018,4.3,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+159,Potassium,mg/l,June,2018,9.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+160,Sodium,mg/l,June,2018,38.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+161,Total Coliform,MPN/100ml,June,2018,1.7E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+162,Faecal Coliform,MPN/100ml,June,2018,1.4E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+163,pH,-,July,2018,7.1,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+164,Conductivity,µs/cm,July,2018,616.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+165,DO,mg/l,July,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+166,COD,mg/l,July,2018,164.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+167,BOD,mg/l,July,2018,77.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+168,NO3-N,mg/l,July,2018,2.4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+169,NH3-N,mg/l,July,2018,22.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+170,Phosphate,mg/l,July,2018,2.01,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+171,TSS,mg/l,July,2018,80.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+172,TDS,mg/l,July,2018,342.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+173,FS,mg/l,July,2018,274.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+174,Turbidity,NTU,July,2018,113.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+175,TH as CaCO3,mg/l,July,2018,214.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+176,Ca as CaCO3,mg/l,July,2018,122.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+177,Mg as CaCO3,mg/l,July,2018,92.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+178,Sulphate,mg/l,July,2018,62.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+179,Chloride,mg/l,July,2018,45.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+180,Total alkalinity as CaCO3,mg/l,July,2018,246.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+181,P-Alkalinity,mg/l,July,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+182,Fluoride,mg/l,July,2018,0.13,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+183,Colour,Hazen,July,2018,20.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+184,Boron(B),mg/l,July,2018,0.12,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+185,TKN,mg/l,July,2018,4.9,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+186,Potassium,mg/l,July,2018,10.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+187,Sodium,mg/l,July,2018,43.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+188,Total Coliform,MPN/100ml,July,2018,5.4E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+189,Faecal Coliform,MPN/100ml,July,2018,4E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+190,pH,-,Aug,2018,7.1,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+191,Conductivity,µs/cm,Aug,2018,559.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+192,DO,mg/l,Aug,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+193,COD,mg/l,Aug,2018,82.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+194,BOD,mg/l,Aug,2018,49.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+195,NO3-N,mg/l,Aug,2018,2.8,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+196,NH3-N,mg/l,Aug,2018,15.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+197,Phosphate,mg/l,Aug,2018,1.03,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+198,TSS,mg/l,Aug,2018,62.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+199,TDS,mg/l,Aug,2018,345.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+200,FS,mg/l,Aug,2018,289.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+201,Turbidity,NTU,Aug,2018,92.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+202,TH as CaCO3,mg/l,Aug,2018,210.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+203,Ca as CaCO3,mg/l,Aug,2018,120.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+204,Mg as CaCO3,mg/l,Aug,2018,90.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+205,Sulphate,mg/l,Aug,2018,54.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+206,Chloride,mg/l,Aug,2018,42.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+207,Total alkalinity as CaCO3,mg/l,Aug,2018,224.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+208,P-Alkalinity,mg/l,Aug,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+209,Fluoride,mg/l,Aug,2018,0.14,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+210,Colour,Hazen,Aug,2018,20.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+211,Boron(B),mg/l,Aug,2018,0.15,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+212,TKN,mg/l,Aug,2018,4.9,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+213,Potassium,mg/l,Aug,2018,10.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+214,Sodium,mg/l,Aug,2018,43.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+215,Total Coliform,MPN/100ml,Aug,2018,2.7E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+216,Faecal Coliform,MPN/100ml,Aug,2018,1.4E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+217,pH,-,Sept,2018,7.4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+218,Conductivity,µs/cm,Sept,2018,724.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+219,DO,mg/l,Sept,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+220,COD,mg/l,Sept,2018,114.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+221,BOD,mg/l,Sept,2018,82.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+222,NO3-N,mg/l,Sept,2018,1.2,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+223,NH3-N,mg/l,Sept,2018,19.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+224,Phosphate,mg/l,Sept,2018,1.4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+225,TSS,mg/l,Sept,2018,37.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+226,TDS,mg/l,Sept,2018,390.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+227,FS,mg/l,Sept,2018,317.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+228,Turbidity,NTU,Sept,2018,96.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+229,TH as CaCO3,mg/l,Sept,2018,242.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+230,Ca as CaCO3,mg/l,Sept,2018,138.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+231,Mg as CaCO3,mg/l,Sept,2018,104.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+232,Sulphate,mg/l,Sept,2018,63.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+233,Chloride,mg/l,Sept,2018,42.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+234,Total alkalinity as CaCO3,mg/l,Sept,2018,264.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+235,P-Alkalinity,mg/l,Sept,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+236,Fluoride,mg/l,Sept,2018,0.13,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+237,Colour,Hazen,Sept,2018,30.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+238,Boron(B),mg/l,Sept,2018,0.08,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+239,TKN,mg/l,Sept,2018,5.3,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+240,Potassium,mg/l,Sept,2018,11.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+241,Sodium,mg/l,Sept,2018,47.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+242,Total Coliform,MPN/100ml,Sept,2018,2.7E+6,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+243,Faecal Coliform,MPN/100ml,Sept,2018,8.6E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+244,pH,-,Oct,2018,7.4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+245,Conductivity,µs/cm,Oct,2018,584.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+246,DO,mg/l,Oct,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+247,COD,mg/l,Oct,2018,160.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+248,BOD,mg/l,Oct,2018,79.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+249,NO3-N,mg/l,Oct,2018,1.5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+250,NH3-N,mg/l,Oct,2018,23.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+251,Phosphate,mg/l,Oct,2018,2.4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+252,TSS,mg/l,Oct,2018,100.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+253,TDS,mg/l,Oct,2018,384.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+254,FS,mg/l,Oct,2018,280.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+255,Turbidity,NTU,Oct,2018,112.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+256,TH as CaCO3,mg/l,Oct,2018,220.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+257,Ca as CaCO3,mg/l,Oct,2018,128.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+258,Mg as CaCO3,mg/l,Oct,2018,92.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+259,Sulphate,mg/l,Oct,2018,68.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+260,Chloride,mg/l,Oct,2018,40.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+261,Total alkalinity as CaCO3,mg/l,Oct,2018,234.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+262,P-Alkalinity,mg/l,Oct,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+263,Fluoride,mg/l,Oct,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+264,Colour,Hazen,Oct,2018,30.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+265,Boron(B),mg/l,Oct,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+266,TKN,mg/l,Oct,2018,4.9,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+267,Potassium,mg/l,Oct,2018,12.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+268,Sodium,mg/l,Oct,2018,28.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+269,Total Coliform,MPN/100ml,Oct,2018,2.7E+6,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+270,Faecal Coliform,MPN/100ml,Oct,2018,8E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+271,pH,-,Nov,2018,7.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+272,Conductivity,µs/cm,Nov,2018,611.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+273,DO,mg/l,Nov,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+274,COD,mg/l,Nov,2018,204.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+275,BOD,mg/l,Nov,2018,65.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+276,NO3-N,mg/l,Nov,2018,2.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+277,NH3-N,mg/l,Nov,2018,23.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+278,Phosphate,mg/l,Nov,2018,2.4,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+279,TSS,mg/l,Nov,2018,120.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+280,TDS,mg/l,Nov,2018,300.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+281,FS,mg/l,Nov,2018,248.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+282,Turbidity,NTU,Nov,2018,119.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+283,TH as CaCO3,mg/l,Nov,2018,220.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+284,Ca as CaCO3,mg/l,Nov,2018,142.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+285,Mg as CaCO3,mg/l,Nov,2018,78.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+286,Sulphate,mg/l,Nov,2018,74.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+287,Chloride,mg/l,Nov,2018,41.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+288,Total alkalinity as CaCO3,mg/l,Nov,2018,266.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+289,P-Alkalinity,mg/l,Nov,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+290,Fluoride,mg/l,Nov,2018,0.12,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+291,Colour,Hazen,Nov,2018,30.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+292,Boron(B),mg/l,Nov,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+293,TKN,mg/l,Nov,2018,26.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+294,Potassium,mg/l,Nov,2018,22.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+295,Sodium,mg/l,Nov,2018,17.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+296,Total Coliform,MPN/100ml,Nov,2018,1.8E+7,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+297,Faecal Coliform,MPN/100ml,Nov,2018,8E+6,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+298,pH,-,Dec,2018,7.1,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+299,Conductivity,µs/cm,Dec,2018,696.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+300,DO,mg/l,Dec,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+301,COD,mg/l,Dec,2018,228.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+302,BOD,mg/l,Dec,2018,69.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+303,NO3-N,mg/l,Dec,2018,6.3,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+304,NH3-N,mg/l,Dec,2018,29.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+305,Phosphate,mg/l,Dec,2018,3.3,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+306,TSS,mg/l,Dec,2018,113.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+307,TDS,mg/l,Dec,2018,318.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+308,FS,mg/l,Dec,2018,324.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+309,Turbidity,NTU,Dec,2018,112.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+310,TH as CaCO3,mg/l,Dec,2018,220.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+311,Ca as CaCO3,mg/l,Dec,2018,140.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+312,Mg as CaCO3,mg/l,Dec,2018,80.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+313,Sulphate,mg/l,Dec,2018,66.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+314,Chloride,mg/l,Dec,2018,40.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+315,Total alkalinity as CaCO3,mg/l,Dec,2018,282.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+316,P-Alkalinity,mg/l,Dec,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+317,Fluoride,mg/l,Dec,2018,0.12,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+318,Colour,Hazen,Dec,2018,30.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+319,Boron(B),mg/l,Dec,2018,0.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+320,TKN,mg/l,Dec,2018,10.9,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+321,Potassium,mg/l,Dec,2018,2.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+322,Sodium,mg/l,Dec,2018,39.0,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+323,Total Coliform,MPN/100ml,Dec,2018,7.6E+6,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+324,Faecal Coliform,MPN/100ml,Dec,2018,1.1E+5,CPCB 2018,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+325,Temperature (Min),°C,,2021,16.0,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+326,Temperature (Max),°C,,2021,32.0,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+327,DO (Min),mg/l,,2021,0.3,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+328,DO (Max),mg/l,,2021,9.1,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+329,pH (Min),-,,2021,6.9,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+330,pH (Max),-,,2021,7.8,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+331,Conductivity (Min),µs/cm,,2021,460.0,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+332,Conductivity (Max),µs/cm,,2021,669.0,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+333,BOD (Min),mg/l,,2021,2.1,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+334,BOD (Max),mg/l,,2021,185.0,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+335,NO3-N (Min),mg/l,,2021,0.5,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+336,NO3-N (Max),mg/l,,2021,2.2,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+337,Faecal Coliform (Min),MPN/100ml,,2021,2700.0,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+338,Faecal Coliform (Max),MPN/100ml,,2021,6.9E+6,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+339,Total Coliform (Min),MPN/100ml,,2021,1.72E+4,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+340,Total Coliform (Max),MPN/100ml,,2021,7.6E+7,CPCB 2021 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+341,Temperature (Min),°C,,2023,15.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+342,Temperature (Max),°C,,2023,29.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+343,DO (Min),mg/l,,2023,0.3,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+344,DO (Max),mg/l,,2023,8.8,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+345,pH (Min),-,,2023,7.1,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+346,pH (Max),-,,2023,7.8,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+347,Conductivity (Min),µs/cm,,2023,150.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+348,Conductivity (Max),µs/cm,,2023,793.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+349,BOD (Min),mg/l,,2023,3.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+350,BOD (Max),mg/l,,2023,118.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+351,NO3-N (Min),mg/l,,2023,0.9,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+352,NO3-N (Max),mg/l,,2023,4.3,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+353,Faecal Coliform (Min),MPN/100ml,,2023,330.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+354,Faecal Coliform (Max),MPN/100ml,,2023,2.6E+5,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+355,Total Coliform (Min),MPN/100ml,,2023,1100.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+356,Total Coliform (Max),MPN/100ml,,2023,9.4E+5,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+357,FS (Min),MPN/100ml,,2023,0.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+358,FS (Max),MPN/100ml,,2023,0.0,CPCB 2023 Exit Point,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+359,pH,,,2024,7.9,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+360,COD,mg/l,,2024,76,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+361,BOD,mg/l,,2024,22,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+362,TSS,mg/l,,2024,22,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+363,TDS,mg/l,,2024,412,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+364,Conductivity,mg/l,,2024,780,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+365,Chloride,mg/l,,2024,34,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+366,Phosphate-P,mg/l,,2024,0.7,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+367,NO2-N,mg/l,,2024,0.08,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+368,NO3-N,mg/l,,2024,0.7,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+369,NH3-N,mg/l,,2024,6,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+370,SO4,mg/l,,2024,66,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+371,Colour,CU,,2024,0,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+372,TKN,mg/l,,2024,7,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53
+373,T-Coliform,MPN/100 ml,,2024,35x10^3,Green tribunal,30.721836,76.731728,NCC02 - Exit of Chandigarh Sector 53

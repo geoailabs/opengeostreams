@@ -1,0 +1,16 @@
+SrNo,Parameter,Unit,Month,Year,Value,Data Source,Location,Latitude,Longitude
+1,pH,,,2024,7.4,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+2,COD,mg/l,,2024,172,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+3,BOD,mg/l,,2024,68,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+4,TSS,mg/l,,2024,105,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+5,TDS,mg/l,,2024,424,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+6,Conductivity,mg/l,,2024,1017,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+7,Chloride,mg/l,,2024,65,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+8,Phosphate-P,mg/l,,2024,4.5,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+9,NO2-N,mg/l,,2024,0,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+10,NO3-N,mg/l,,2024,0,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+11,NH3-N,mg/l,,2024,0,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+12,SO4,mg/l,,2024,42,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+13,Colour,CU,,2024,0,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+14,TKN,mg/l,,2024,0,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189
+15,T-Coliform,MPN/100 ml,,2024,92x10^5,Green tribunal,NCM04 - 45MLD STP Chilla Village,30.65295,76.72189

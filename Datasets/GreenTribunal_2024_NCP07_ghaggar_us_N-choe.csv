@@ -1,0 +1,16 @@
+SrNo,Parameter,Unit,Month,Year,Value,Data Source,Location,Latitude,Longitude
+1,pH,,,2024,7.7,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+2,COD,mg/l,,2024,87,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+3,BOD,mg/l,,2024,27,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+4,TSS,mg/l,,2024,73,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+5,TDS,mg/l,,2024,584,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+6,Conductivity,mg/l,,2024,1220,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+7,Chloride,mg/l,,2024,123,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+8,Phosphate-P,mg/l,,2024,1.3,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+9,NO2-N,mg/l,,2024,0.04,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+10,NO3-N,mg/l,,2024,0,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+11,NH3-N,mg/l,,2024,17,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+12,SO4,mg/l,,2024,46,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+13,Colour,CU,,2024,0,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+14,TKN,mg/l,,2024,19,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
+15,T-Coliform,MPN/100 ml,,2024,13x10^4,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388

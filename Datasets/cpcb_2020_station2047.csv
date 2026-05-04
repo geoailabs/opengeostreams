@@ -1,0 +1,17 @@
+SrNo,Parameter,Unit,Month,Year,Value,Data Source,Latitude,Longitude
+1,Temperature (Min),°C,,2020,18.2,CPCB 2020 Exit Point,30.742291,76.767246
+2,Temperature (Max),°C,,2020,29.0,CPCB 2020 Exit Point,30.742291,76.767246
+3,DO (Min),mg/l,,2020,0.0,CPCB 2020 Exit Point,30.742291,76.767246
+4,DO (Max),mg/l,,2020,0.6,CPCB 2020 Exit Point,30.742291,76.767246
+5,pH (Min),-,,2020,6.8,CPCB 2020 Exit Point,30.742291,76.767246
+6,pH (Max),-,,2020,7.5,CPCB 2020 Exit Point,30.742291,76.767246
+7,Conductivity (Min),µs/cm,,2020,556.0,CPCB 2020 Exit Point,30.742291,76.767246
+8,Conductivity (Max),µs/cm,,2020,667.0,CPCB 2020 Exit Point,30.742291,76.767246
+9,BOD (Min),mg/l,,2020,33.0,CPCB 2020 Exit Point,30.742291,76.767246
+10,BOD (Max),mg/l,,2020,210.0,CPCB 2020 Exit Point,30.742291,76.767246
+11,NO3-N (Min),mg/l,,2020,1.5,CPCB 2020 Exit Point,30.742291,76.767246
+12,NO3-N (Max),mg/l,,2020,4.2,CPCB 2020 Exit Point,30.742291,76.767246
+13,Faecal Coliform (Min),MPN/100ml,,2020,0.0,CPCB 2020 Exit Point,30.742291,76.767246
+14,Faecal Coliform (Max),MPN/100ml,,2020,3.2E+6,CPCB 2020 Exit Point,30.742291,76.767246
+15,Total Coliform (Min),MPN/100ml,,2020,2.21,CPCB 2020 Exit Point,30.742291,76.767246
+16,Total Coliform (Max),MPN/100ml,,2020,1.75E+7,CPCB 2020 Exit Point,30.742291,76.767246

@@ -1,0 +1,34 @@
+SrNo,Parameter,Unit,Month,Year,Value,Data Source,Location,Latitude,Longitude
+1,pH,-,Nov,2024,8.2,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+2,pH,-,Dec,2024,8.1,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+3,pH,-,Jan,2025,7.8,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+4,TDS,mg/l,Nov,2024,310.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+5,TDS,mg/l,Dec,2024,341.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+6,TDS,mg/l,Jan,2025,335.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+7,Conductivity,µs/cm,Nov,2024,650.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+8,Conductivity,µs/cm,Dec,2024,672.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+9,Conductivity,µs/cm,Jan,2025,677.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+10,Temperature,°C,Nov,2024,25.8,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+11,Temperature,°C,Dec,2024,21.6,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+12,Temperature,°C,Jan,2025,18.2,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+13,TSS,mg/l,Nov,2024,343.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+14,TSS,mg/l,Dec,2024,13.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+15,TSS,mg/l,Jan,2025,124.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+16,VSS,mg/l,Nov,2024,267.4999999999983,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+17,VSS,mg/l,Dec,2024,2.499999999994173,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+18,VSS,mg/l,Jan,2025,105.5000000000028,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+19,Fixed Suspended Solids,mg/l,Nov,2024,75.00000000000284,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+20,Fixed Suspended Solids,mg/l,Dec,2024,10.00000000001222,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+21,Fixed Suspended Solids,mg/l,Jan,2025,18.00000000001134,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+22,COD,mg/l,Nov,2024,58.00000000000004,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+23,COD,mg/l,Dec,2024,45.99999999999994,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+24,COD,mg/l,Jan,2025,43.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+25,BOD,mg/l,Nov,2024,8.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+26,BOD,mg/l,Dec,2024,13.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+27,BOD,mg/l,Jan,2025,20.0,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+28,NO3-N,mg/l,Nov,2024,5.7,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+29,NO3-N,mg/l,Dec,2024,4.06,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+30,NO3-N,mg/l,Jan,2025,5.1,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+31,Phosphate,mg/l,Nov,2024,0.75,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+32,Phosphate,mg/l,Dec,2024,0.38,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
+33,Phosphate,mg/l,Jan,2025,0.57,professor,N-CHOE (Leisure valley parK CHD.),30.703138,76.739417
