@@ -1015,7 +1015,7 @@ body.is-dragging-panel {
   white-space: nowrap;
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
   }
