@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenGeoStreams Water Quality Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  >
+  <link rel="stylesheet" href="./styles.css?v=20260913-general-rivers">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <section class="hero-card hero-card-collapsible" id="hero-card">
+        <div class="hero-summary">
+          <div class="hero-summary-copy">
+            <h1>OpenGeoStreams <span>Water Quality Dashboard</span></h1>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-section data-import-panel">
+        <div class="section-heading">
+          <h2>Dashboard data</h2>
+          <span id="data-mode" class="badge subtle">No CSV loaded</span>
+        </div>
+        <form id="csv-upload-form" class="csv-upload-form">
+          <label class="csv-file-label" for="csv-file">Import data files</label>
+          <input id="csv-file" name="file" type="file" accept=".csv,.tsv,.txt,.json,.xlsx,.xls" multiple required>
+          <label class="csv-file-label" for="csv-row-limit">Rows to import per file</label>
+          <p class="section-copy">CSV, TSV, delimited TXT, JSON tables, or Excel (first sheet). Non-CSV tables are converted automatically.</p>
+          <input id="csv-row-limit" name="rows" type="number" min="1" step="1" value="400" required>
+          <div class="csv-upload-actions">
+            <button id="csv-upload-button" type="submit" class="about-open-button">Load files</button>
+            <button id="csv-reset-button" type="button" class="csv-reset-button">Clear all data</button>
+          </div>
+        </form>
+        <label class="csv-file-label" for="csv-dataset-select">Active CSV</label>
+        <select id="csv-dataset-select" disabled aria-label="Active CSV">
+          <option value="">No imported CSVs</option>
+        </select>
+        <p id="csv-shape-summary" class="csv-shape-summary" aria-live="polite">0 rows · 0 columns · 0 missing values</p>
+        <div id="interpolation-availability" class="interpolation-availability" aria-live="polite" hidden></div>
+        <p id="csv-upload-status" class="section-copy csv-upload-status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel-section about-panel">
+        <div class="section-heading">
+          <h2>About OpenGeoStreams</h2>
+        </div>
+        <button type="button" id="about-open" class="about-open-button">Open Description</button>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-heading">
+          <h2>Parameters</h2>
+          <span id="parameter-unit" class="badge subtle">Unit</span>
+        </div>
+        <p id="range-note" class="section-copy" hidden></p>
+        <div id="parameter-tabs" class="tab-list" aria-label="Water quality parameters"></div>
+      </section>
+
+    <section id="dashboard-charts" class="dashboard-charts" aria-label="Water quality charts">
+
+      <section class="panel-section chart-card">
+        <div class="section-heading">
+          <h2>Parameter and Precipitation Trend</h2>
+          <span id="value-summary" class="badge subtle">No data</span>
+          <span id="weather-status" class="badge subtle">Precipitation loading</span>
+        </div>
+        <div class="trend-chart-shell">
+          <div id="trend-chart" class="trend-chart" role="img" aria-label="Trend chart"></div>
+          <div id="trend-empty" class="trend-empty is-hidden" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="panel-section boxplot-panel chart-card">
+        <div class="section-heading">
+          <h2>Distribution</h2>
+          <div id="boxplot-grouping" class="boxplot-grouping" aria-label="Boxplot grouping">
+            <button type="button" class="is-active" data-boxplot-grouping="year">Years</button>
+            <button type="button" data-boxplot-grouping="month">Months</button>
+          </div>
+        </div>
+        <div class="boxplot-shell">
+          <div id="boxplot-chart" class="boxplot-chart" role="img" aria-label="Parameter distribution boxplot"></div>
+          <div id="boxplot-empty" class="trend-empty is-hidden" aria-live="polite"></div>
+          <div id="boxplot-tooltip" class="boxplot-tooltip is-hidden" role="tooltip"></div>
+        </div>
+
+      </section>
+
+      <section class="panel-section chart-card">
+        <div class="section-heading">
+          <h2>Stream Visualization</h2>
+          <span id="stream-status" class="badge subtle">Select parameter</span>
+        </div>
+        <div class="chart-scroll"><div id="stream-visualization" class="stream-viz-shell" aria-live="polite"></div></div>
+        <div id="stream-pagination" class="stream-pagination" hidden><button id="stream-prev" type="button">Previous</button><span id="stream-page-label" aria-live="polite"></span><button id="stream-next" type="button">Next</button></div>
+        <div class="stream-colour-key" aria-label="Stream colour legend">
+          <span><i class="stream-value-gradient"></i> Blue: lower &middot; Yellow: middle &middot; Red: higher</span>
+          <span><i class="stream-missing-swatch"></i> Grey: no data</span>
+          <small>Colours compare mean values for the selected parameter, not safety levels.</small>
+        </div>
+      </section>
+
+
+    </section>
+    </aside>
+
+    <main class="map-area">
+      <div class="map-toolbar">
+        <div class="map-toolbar-copy">
+          <p class="eyebrow">Interactive Map</p>
+          <h2>Sampling points across the selected river</h2>
+        <div id="basemap-toggle" class="basemap-toggle" aria-label="Base map switcher">
+          <button type="button" class="basemap-button is-active" data-basemap="osm">OSM</button>
+          <button type="button" class="basemap-button" data-basemap="minimal">Minimal</button>
+          <button type="button" class="basemap-button" data-basemap="satellite">Satellite</button>
+        </div>
+          <section class="suitability-panel" aria-label="Suitability screening">
+            <div class="suitability-panel-heading">
+              <h3>Use-case screening</h3>
+              <div class="suitability-summary-group">
+                <span id="suitability-summary" class="suitability-summary">Checking latest filtered sample across mapped stations.</span>
+                <span id="suitability-detail" class="suitability-detail">Confirmed checks, proxy checks, and missing checks will appear for the selected station.</span>
+              </div>
+            </div>
+            <div id="use-case-tabs" class="use-case-tabs" aria-label="Suitability use cases"></div>
+          </section>
+          <div class="map-interpolation-controls">
+            <label><input id="map-interpolation-toggle" type="checkbox" checked> Interpolation</label>
+            <button type="button" id="view-interpolation">View interpolation</button>
+            <label><input type="checkbox" id="show-stations" checked> Show stations</label>
+            <span id="map-interpolation-legend" hidden></span>
+            <span id="map-interpolation-status" aria-live="polite">Import a CSV to view interpolation.</span>
+          </div>
+        </div>
+
+
+        <div class="toolbar-stats">
+          <div class="stat-card">
+            <span class="stat-value" id="mapped-count">0</span>
+            <span class="stat-label">Mapped locations</span>
+          </div>
+          <section id="parameter-scale" class="parameter-scale-card" aria-label="Selected parameter safety scale"></section>
+        </div>
+
+      </div>
+
+      <div id="map" class="map-canvas" aria-label="Map of water quality stations"></div>
+
+      <section id="period-panel" class="period-panel" aria-label="Month and annual filters">
+        <div class="section-heading period-panel-heading">
+          <h2>Timeline</h2>
+          <span>Choose a period and year</span>
+        </div>
+        <div id="period-filter" class="period-filter" aria-label="Month or annual period"></div>
+        <div class="year-filter-shell">
+          <div class="year-filter-heading">
+            <h3>Years</h3>
+          </div>
+          <div id="year-filter" class="period-filter"></div>
+        </div>
+      </section>
+
+      <div class="legend-card">
+        <div><span class="legend-dot legend-dot-safe"></span> Pass</div>
+        <div><span class="legend-dot legend-dot-caution"></span> Caution</div>
+        <div><span class="legend-dot legend-dot-unsafe"></span> Fail</div>
+        <div><span class="legend-dot legend-dot-unknown"></span> Insufficient data</div>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="about-dialog" class="about-dialog">
+    <div class="about-dialog-card">
+      <div class="section-heading">
+        <h2>About OpenGeoStreams</h2>
+        <button type="button" id="about-close" class="about-close-button" aria-label="Close description">Close</button>
+      </div>
+      <p class="section-copy">
+        OpenGeoStreams enables users to upload water-quality data for any river as a CSV and transform it into interactive maps, temporal trends, distribution summaries, precipitation comparisons, interpolation surfaces, and river-health insights. These visualizations help users explore spatial and seasonal patterns, identify potential water-quality concerns, and better understand the overall health of the river.
+      </p>
+    </div>
+  </dialog>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+  <script src="/plotly.min.js"></script>
+  <script src="./dashboard-data.js?v=20260824-empty-state"></script>
+  <script src="./app.js?v=20260913-general-rivers"></script>
+  <script>
+    (function () {
+      var data = window.NCHOE_DASHBOARD_DATA || {};
+      var form = document.getElementById('csv-upload-form');
+      var fileInput = document.getElementById('csv-file');
+      var uploadButton = document.getElementById('csv-upload-button');
+      var resetButton = document.getElementById('csv-reset-button');
+      var status = document.getElementById('csv-upload-status');
+      var shapeSummary = document.getElementById('csv-shape-summary');
+      var interpolationAvailability = document.getElementById('interpolation-availability');
+      var mode = document.getElementById('data-mode');
+      var selector = document.getElementById('csv-dataset-select');
+      var activeId = '';
+      function setBusy(busy) {
+        uploadButton.disabled = busy;
+        resetButton.disabled = busy;
+        fileInput.disabled = busy;
+        document.getElementById('csv-row-limit').disabled = busy;
+        selector.disabled = busy || !selector.options.length || !selector.options[0].value;
+      }
+      async function refreshDatasets() {
+        var response = await fetch('/datasets');
+        if (!response.ok) throw new Error('Could not load the CSV list.');
+        var result = await response.json();
+        selector.replaceChildren();
+        var counts = {};
+        result.datasets.forEach(function (entry) {
+          counts[entry.fileName] = (counts[entry.fileName] || 0) + 1;
+          var label = entry.fileName + (counts[entry.fileName] > 1 ? ' (' + counts[entry.fileName] + ')' : '');
+          selector.add(new Option(label, entry.id));
+        });
+        activeId = result.activeId || '';
+        if (!result.datasets.length) selector.add(new Option('No imported CSVs', ''));
+        selector.value = activeId;
+        resetButton.hidden = !result.datasets.length && !data.imported;
+        setBusy(false);
+      }
+      setBusy(true);
+      refreshDatasets().catch(function (error) {
+        status.textContent = error.message;
+        setBusy(false);
+      });
+      selector.addEventListener('change', async function () {
+        var selectedId = selector.value;
+        setBusy(true);
+        status.textContent = 'Switching CSV...';
+        try {
+          var response = await fetch('/select-csv', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: selectedId })
+          });
+          var result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Could not switch CSV.');
+          window.sessionStorage.removeItem('nchoe-dashboard-cleared');
+          window.sessionStorage.removeItem('nchoe-dashboard-shape');
+          window.location.replace('/?data=' + Date.now());
+        } catch (error) {
+          selector.value = activeId;
+          status.textContent = error.message;
+          setBusy(false);
+        }
+      });
+      var savedShape = null;
+      try {
+        savedShape = JSON.parse(window.sessionStorage.getItem('nchoe-dashboard-shape') || 'null');
+      } catch (_error) {
+        savedShape = null;
+      }
+
+      if (mode) mode.textContent = data.imported ? (data.activeFile || 'Imported CSV') : 'No CSV loaded';
+      if (shapeSummary) {
+        var summary = data.summary || {};
+        var savedShapeMatches = savedShape && savedShape.fileName === data.activeFile;
+        var rowCount = Number.isFinite(summary.recordCount) ? summary.recordCount : (savedShapeMatches ? savedShape.rows : 0);
+        var columnCount = Number.isFinite(summary.columnCount) ? summary.columnCount : (savedShapeMatches ? savedShape.columns : 0);
+        var missingCount = Number.isFinite(summary.missingValueCount) ? summary.missingValueCount : (savedShapeMatches ? savedShape.missing : 0);
+        var totalCells = rowCount * columnCount;
+        var missingPercent = totalCells ? ((missingCount / totalCells) * 100).toFixed(1) : '0.0';
+        shapeSummary.textContent = rowCount + (Number.isFinite(summary.totalRows) ? ' of ' + summary.totalRows : '') + ' rows · ' + columnCount + ' imported columns · ' + missingCount + ' missing cells (' + missingPercent + '%)';
+        if (Number.isFinite(summary.sourceColumnCount) && summary.sourceColumnCount !== columnCount) shapeSummary.appendChild(document.createTextNode(' | Original file: ' + summary.sourceColumnCount + ' columns; converted table: ' + columnCount + '.'));
+        var columns = Object.keys(summary.missingByColumn || {});
+        if (columns.length) {
+          var columnDetails = document.createElement('details');
+          columnDetails.className = 'column-details';
+          var columnHeading = document.createElement('summary');
+          columnHeading.textContent = 'Which ' + columns.length + ' columns are counted?';
+          columnDetails.appendChild(columnHeading);
+          var columnNames = document.createElement('p');
+          columnNames.textContent = columns.join(', ') + '.';
+          columnDetails.appendChild(columnNames);
+          if (summary.sourceColumns) {
+            var sourceNames = document.createElement('p');
+            sourceNames.textContent = 'Original file headers: ' + summary.sourceColumns.join(', ') + '.';
+            columnDetails.appendChild(sourceNames);
+          }
+          shapeSummary.appendChild(columnDetails);
+        }
+      }
+      if (interpolationAvailability) {
+        var mappedStationCount = Number((data.summary || {}).mappedLocationCount || 0);
+        if (!data.activeFile) {
+          interpolationAvailability.hidden = true;
+        } else if (mappedStationCount < 1) {
+          interpolationAvailability.hidden = false;
+          interpolationAvailability.className = 'interpolation-availability is-warning';
+          interpolationAvailability.innerHTML = '<strong>Interpolation unavailable</strong><span>This dataset has no monitoring stations with valid coordinates.</span>';
+        } else {
+          interpolationAvailability.hidden = false;
+          interpolationAvailability.className = 'interpolation-availability is-available';
+          interpolationAvailability.innerHTML = '<strong>Interpolation eligible</strong><span>' + mappedStationCount + ' unique mapped station' + (mappedStationCount === 1 ? ' is' : 's are') + ' available. Individual parameters require at least one numeric measurement.</span>';
+        }
+      }
+      if (resetButton) resetButton.hidden = !data.imported;
+
+      if (form) form.addEventListener('submit', async function (event) {
+        event.preventDefault();
+        if (!fileInput.files.length) return;
+        var files = Array.from(fileInput.files);
+        var failures = [];
+        var loaded = 0;
+        setBusy(true);
+        for (var index = 0; index < files.length; index += 1) {
+          status.textContent = 'Loading ' + (index + 1) + ' of ' + files.length + ': ' + files[index].name;
+          try {
+            var body = new FormData();
+            body.append('file', files[index]);
+            var response = await fetch('/upload-csv?rows=' + encodeURIComponent(document.getElementById('csv-row-limit').value), { method: 'POST', body: body });
+            var result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'CSV upload failed.');
+            loaded += 1;
+          } catch (error) {
+            failures.push(files[index].name + ': ' + error.message);
+          }
+        }
+        var message = loaded + ' CSV(s) loaded.' + (failures.length ? ' Failed: ' + failures.join('; ') : '');
+        if (loaded) {
+          window.sessionStorage.setItem('nchoe-csv-status', message);
+          window.sessionStorage.removeItem('nchoe-dashboard-cleared');
+          window.sessionStorage.removeItem('nchoe-dashboard-shape');
+          window.location.replace('/?data=' + Date.now());
+        } else {
+          status.textContent = message;
+          setBusy(false);
+        }
+      });
+
+      var savedStatus = window.sessionStorage.getItem('nchoe-csv-status');
+      if (savedStatus) {
+        status.textContent = savedStatus;
+        window.sessionStorage.removeItem('nchoe-csv-status');
+      }
+      if (resetButton) resetButton.addEventListener('click', async function () {
+        setBusy(true);
+        status.textContent = 'Clearing all dashboard data...';
+        try {
+          var response = await fetch('/reset-data', { method: 'POST' });
+          var result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Could not clear data.');
+          window.sessionStorage.setItem('nchoe-dashboard-cleared', '1');
+          window.sessionStorage.removeItem('nchoe-dashboard-shape');
+          window.location.replace('/?cleared=' + Date.now());
+        } catch (error) {
+          status.textContent = error.message;
+          setBusy(false);
+        }
+      });
+
+      var dialog = document.getElementById('about-dialog');
+      var openButton = document.getElementById('about-open');
+      var closeButton = document.getElementById('about-close');
+      if (!dialog || !openButton || !closeButton) return;
+
+      openButton.addEventListener('click', function () {
+        if (typeof dialog.showModal === 'function') {
+          dialog.showModal();
+        } else {
+          dialog.setAttribute('open', 'open');
+        }
+      });
+
+      closeButton.addEventListener('click', function () {
+        if (typeof dialog.close === 'function') {
+          dialog.close();
+        } else {
+          dialog.removeAttribute('open');
+        }
+      });
+
+      dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) {
+          if (typeof dialog.close === 'function') {
+            dialog.close();
+          } else {
+            dialog.removeAttribute('open');
+          }
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

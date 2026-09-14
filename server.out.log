@@ -1,4 +1,0 @@
-Refreshing dashboard data (server startup)...
-Created dashboard-data.js from 13 dataset file(s) with 1568 records.
-N-choe dashboard running at http://127.0.0.1:4173
-Dataset auto-refresh is enabled. New CSVs in Datasets will rebuild dashboard-data.js automatically.

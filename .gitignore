@@ -1,2 +1,15 @@
-node_modules/ 
-*.log 
+node_modules/
+*.log
+.venv/
+__pycache__/
+*.pyc
+
+# Local runtime helpers, exports, and build products
+launch_restored_dashboard.py
+outputs/
+build/
+dist/
+*.egg-info/
+.env
+.env.*
+!.env.example

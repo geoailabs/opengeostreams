@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opengeostreams"
+version = "2.0.0"
+description = "Pandas-style analysis, interpolation, and visualization for river water quality"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["openpyxl>=3.1", "xlrd>=2.0", "numpy>=2.0", "pandas>=2.2", "plotly>=6.0", "nbformat>=4.2", "folium>=0.15", "pillow>=9", "certifi>=2024.0"]
+
+[project.optional-dependencies]
+images = ["kaleido>=1.0", "playwright>=1.40"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["opengeostreams*"]
+
+[tool.setuptools.package-data]
+opengeostreams = ["dashboard_assets/*"]

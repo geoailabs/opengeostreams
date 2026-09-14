@@ -1,23 +1,29 @@
 (function () {
+  // All dashboard data is prebuilt into a global object before this script runs.
   const dashboardData = window.NCHOE_DASHBOARD_DATA;
+  // Keep the upload controls and the visualization code on the same active payload.
+  window.NCHOE_DASHBOARD_DATA = dashboardData;
 
+  // Stop early with a visible message if the generated dashboard payload is missing.
   if (!dashboardData || !Array.isArray(dashboardData.records)) {
     document.getElementById("location-name").textContent = "Dashboard data not found";
-    document.getElementById("location-meta").textContent = "Run build-dashboard-data.ps1 to generate dashboard-data.js.";
+    document.getElementById("location-meta").textContent = "Start dashboard_server.py to generate dashboard data.";
     return;
   }
 
+  // Central UI state. Every user interaction updates some part of this object.
   const state = {
     selectedLocation: null,
     selectedParameter: null,
     selectedTimelineKey: null,
-    selectedWeatherMonthKey: null,
     selectedPeriod: "annual",
     selectedYear: "all",
     baseMap: "osm",
     selectedUseCase: "human_consumption",
+    boxplotGrouping: "year",
   };
 
+  // Month options used by the period filter and monthly chart logic.
   const MONTH_OPTIONS = [
     { key: "jan", label: "Jan", monthIndex: 1 },
     { key: "feb", label: "Feb", monthIndex: 2 },
@@ -33,6 +39,7 @@
     { key: "dec", label: "Dec", monthIndex: 12 },
   ];
 
+  // Separate month labels for weather aggregation and chart rendering.
   const WEATHER_MONTHS = [
     { key: 1, label: "Jan" },
     { key: 2, label: "Feb" },
@@ -48,19 +55,23 @@
     { key: 12, label: "Dec" },
   ];
 
-  const CHART_Y_AXIS_WIDTH = 54;
+  // Fixed Y-axis width keeps the chart area aligned even when tick labels change.
+  // These are the four suitability modes the user can switch between.
   const USE_CASES = [
     { key: "human_consumption", label: "Human Consumption" },
     { key: "agriculture", label: "Agriculture" },
     { key: "aquatic_life", label: "Aquatic Life" },
     { key: "bathing", label: "Bathing" },
   ];
+  // Marker colors on the map depend on the screening result for the chosen use case.
   const SUITABILITY_COLORS = {
     safe: "#16a34a",
     caution: "#d97706",
     unsafe: "#dc2626",
     unknown: "#64748b",
   };
+  // For each use case, this maps our internal screening fields to dataset parameter names.
+  // "confirmed" means we trust that CSV field directly. "proxy" means it is only a near match.
   const SCREENING_PARAMETER_SPECS = {
     human_consumption: [
       { key: "pH", confirmed: ["pH"] },
@@ -106,12 +117,14 @@
       { key: "e_coli_present", confirmed: [] },
     ],
   };
+  // Core keys are the minimum checks needed before we can confidently classify a site.
   const CORE_KEYS_BY_USE_CASE = {
     human_consumption: ["pH", "turbidity_ntu", "tds_mg_l", "nitrate_mg_l", "fluoride_mg_l", "total_coliform_mpn_100ml", "e_coli_present"],
     agriculture: ["pH", "ec_us_cm", "sar", "boron_mg_l"],
     aquatic_life: ["pH", "dissolved_oxygen_mg_l", "free_ammonia_mg_l_as_n"],
     bathing: ["pH", "dissolved_oxygen_mg_l", "bod_mg_l", "total_coliform_mpn_100ml", "fecal_coliform_mpn_100ml", "e_coli_present"],
   };
+  // Threshold metadata for the parameter safety scale panel.
   const PARAMETER_SCALE_DEFINITIONS = {
     human_consumption: {
       ph: { label: "pH", type: "range", safeMin: 6.5, safeMax: 8.5, domainMin: 0, domainMax: 14 },
@@ -146,12 +159,53 @@
       ph: { label: "pH", type: "range", safeMin: 6.5, safeMax: 8.5, domainMin: 0, domainMax: 14 },
       do: { label: "Dissolved Oxygen", type: "min", safeMin: 5.0, unit: "mg/L", domainMin: 0, domainMax: 10 },
       bod: { label: "BOD", type: "max", safeMax: 3.0, unit: "mg/L", domainMin: 0, domainMax: 10 },
-      total_coliform: { label: "Total Coliform", type: "max", safeMax: 500, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
-      fecal_coliform: { label: "Faecal Coliform", type: "max", safeMax: 500, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
+      total_coliform: { label: "Total Coliform", type: "max", safeMax: 0, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
+      fecal_coliform: { label: "Faecal Coliform", type: "max", safeMax: 0, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
       turbidity: { label: "Turbidity", type: "max", safeMax: 10, unit: "NTU" },
     },
   };
+  const GLOBAL_PARAMETER_SCALE_DEFINITIONS = {
+    total_coliform: { label: "Total Coliform", type: "max", safeMax: 0, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
+    fecal_coliform: { label: "Faecal Coliform", type: "max", safeMax: 0, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
+  };
+  const PARAMETER_DESCRIPTIONS = {
+    "BOD": "Oxygen used by microbes to break down organic matter.",
+    "Boron(B)": "Boron level, important for irrigation suitability.",
+    "COD": "Oxygen needed to chemically oxidize pollutants.",
+    "Ca as CaCO3": "Calcium hardness expressed as CaCO3.",
+    "Chloride": "Dissolved chloride salt concentration.",
+    "Colour": "Water colour from dissolved or suspended material.",
+    "Conductivity": "Indicator of dissolved ions and salinity.",
+    "DO": "Oxygen available for aquatic life.",
+    "FS": "Mineral fraction of total solids.",
+    "Faecal Coliform": "Indicator of fecal contamination.",
+    "Fixed Suspended Solids": "Mineral fraction of suspended particles.",
+    "Fluoride": "Dissolved fluoride concentration.",
+    "Mg as CaCO3": "Magnesium hardness expressed as CaCO3.",
+    "NH3-N": "Ammonia nitrogen from waste or decay.",
+    "NO2-N": "Nitrite nitrogen, often a pollution indicator.",
+    "NO3-N": "Nitrate nitrogen from fertilizers or sewage.",
+    "P-Alkalinity": "Carbonate/hydroxide alkalinity above pH 8.3.",
+    "Phosphate": "Nutrient that can drive algal growth.",
+    "Phosphate-P": "Phosphate reported as phosphorus.",
+    "Potassium": "Dissolved potassium ion concentration.",
+    "SO4": "Dissolved sulfate concentration.",
+    "Sodium": "Dissolved sodium affecting salinity and soils.",
+    "Sulphate": "Dissolved sulfate concentration.",
+    "T-Coliform": "Broad sanitary indicator bacteria.",
+    "TDS": "Dissolved salts, minerals, and organics.",
+    "TH as CaCO3": "Total calcium and magnesium hardness.",
+    "TKN": "Organic nitrogen plus ammonia.",
+    "TSS": "Suspended particles in the water.",
+    "Temperature": "Water temperature affecting oxygen and habitat.",
+    "Total Coliform": "Broad sanitary indicator bacteria.",
+    "Total alkalinity as CaCO3": "Water's acid-neutralizing capacity.",
+    "Turbidity": "Cloudiness from suspended particles.",
+    "VSS": "Organic fraction of suspended solids.",
+    "pH": "How acidic or basic the water is.",
+  };
 
+  // Cache DOM references once so we do not repeatedly query the page. So that code can update UI easily
   const els = {
     heroCard: document.getElementById("hero-card"),
     heroToggle: document.getElementById("hero-toggle"),
@@ -166,8 +220,10 @@
     valueSummary: document.getElementById("value-summary"),
     trendChart: document.getElementById("trend-chart"),
     trendEmpty: document.getElementById("trend-empty"),
-    weatherChart: document.getElementById("weather-chart"),
-    weatherEmpty: document.getElementById("weather-empty"),
+    boxplotChart: document.getElementById("boxplot-chart"),
+    boxplotEmpty: document.getElementById("boxplot-empty"),
+    boxplotGrouping: document.getElementById("boxplot-grouping"),
+    boxplotTooltip: document.getElementById("boxplot-tooltip"),
     weatherStatus: document.getElementById("weather-status"),
     streamVisualization: document.getElementById("stream-visualization"),
     streamStatus: document.getElementById("stream-status"),
@@ -183,18 +239,285 @@
     suitabilityDetail: document.getElementById("suitability-detail"),
   };
 
+  // Fast lookup stores used throughout the dashboard. Builds maps and caches
   const locationIndex = new Map();
   const groupedRecords = new Map();
   const markers = new Map();
-  const weatherCache = new Map();
-  let trendChartInstance = null;
-  let weatherChartInstance = null;
-  let streamTooltipEl = null;
+  const figureRequests = new Map();
+  let interpolationData = null;
+  let interpolationOverlay = null;
+  let interpolationEnabled = true;
+  let interpolationRequest = null;
 
+  function clearLibraryFigure(kind, element, empty, message) {
+    figureRequests.get(kind)?.abort();
+    figureRequests.delete(kind);
+    if (kind === "distribution") { els.boxplotTooltip?.classList.add("is-hidden"); }
+    if (!element) return;
+    element.removeAttribute("aria-busy");
+    if (window.Plotly && element.data) Plotly.purge(element);
+    if (empty) {
+      element.style.visibility = "hidden";
+      empty.textContent = message;
+      empty.classList.remove("is-hidden");
+    } else {
+      element.textContent = message;
+    }
+  }
+
+  function installBoxplotHover(element, statistics) {
+    const tooltip = els.boxplotTooltip;
+    if (!tooltip) return;
+    if (tooltip.parentElement !== document.body) {
+      document.body.appendChild(tooltip);
+      element.addEventListener("pointerleave", () => tooltip.classList.add("is-hidden"));
+    }
+    tooltip.classList.add("is-hidden");
+    element.removeAllListeners("plotly_hover");
+    element.removeAllListeners("plotly_unhover");
+    element.on("plotly_hover", event => {
+      const point = event.points.find(point => point.curveNumber === 0) || event.points[0];
+      if (!point) { tooltip.classList.add("is-hidden"); return; }
+      const item = statistics.find(item => item.group === String(point.x)) || statistics[point.pointNumber];
+      if (!item) return;
+      const fields = [["min", "Minimum"], ["q1", "Q1"], ["median", "Median"], ["q3", "Q3"],
+        ["max", "Maximum"], ["mean", "Mean"], ["iqr", "IQR"], ["count", "Sample count"],
+        ["lowerWhisker", "Lower whisker"], ["upperWhisker", "Upper whisker"]];
+      tooltip.innerHTML = `<strong>${escapeHtml(state.selectedParameter)} &mdash; ${escapeHtml(item.group)}</strong><dl>` +
+        fields.map(([key, label]) => `<div><dt>${label}</dt><dd>${Number(item[key]).toLocaleString(undefined, {maximumSignificantDigits: 6})}</dd></div>`).join("") + "</dl>";
+      tooltip.classList.remove("is-hidden");
+      const bounds = element.getBoundingClientRect();
+      const x = event.event?.clientX ?? bounds.left + bounds.width / 2;
+      const y = event.event?.clientY ?? bounds.top + bounds.height / 2;
+      tooltip.style.left = `${Math.max(8, Math.min(x + 14, window.innerWidth - tooltip.offsetWidth - 8))}px`;
+      tooltip.style.top = `${Math.max(8, Math.min(y + 14, window.innerHeight - tooltip.offsetHeight - 8))}px`;
+    });
+    element.on("plotly_unhover", () => tooltip.classList.add("is-hidden"));
+  }
+
+  function installTrendHover(element, kind = "trend") {
+    const tooltipId = `${kind}-tooltip`;
+    let tooltip = document.getElementById(tooltipId);
+    if (!tooltip) {
+      tooltip = document.createElement("div");
+      tooltip.id = tooltipId;
+      tooltip.className = "is-hidden";
+      tooltip.setAttribute("role", "tooltip");
+      document.body.appendChild(tooltip);
+      const hide = () => tooltip.classList.add("is-hidden");
+      element.addEventListener("pointerleave", hide);
+      document.addEventListener("scroll", hide, true);
+      document.addEventListener("pointerdown", hide, true);
+      document.addEventListener("keydown", hide);
+      window.addEventListener("blur", hide);
+      window.addEventListener("resize", hide);
+      document.addEventListener("visibilitychange", hide);
+      document.addEventListener("pointermove", event => {
+        if (!element.contains(event.target)) hide();
+      });
+    }
+    tooltip.classList.add("is-hidden");
+    element.removeAllListeners("plotly_hover");
+    element.removeAllListeners("plotly_unhover");
+    element.on("plotly_hover", event => {
+      const point = event.points?.[0];
+      if (!point) return;
+      if (kind === "stream" && !Number.isFinite(point.z)) { tooltip.classList.add("is-hidden"); return; }
+      const data = point.customdata || [];
+      const rain = point.data.yaxis === "y2";
+      const fields = [["Location", data[0]], ["Period", data[1]],
+        [rain ? "Precipitation total" : point.data.name || "Value", `${formatCompactNumber(point.y)} ${data[2] || ""}`],
+        ["Source", data[3]]];
+      if (kind === "stream") {
+        fields.splice(0, fields.length, ["Location", point.y], ["Year", point.x], ["Parameter", state.selectedParameter], ["Mean value", formatCompactNumber(point.z)]);
+      } else if (!rain && data[4] != null) fields.push(["Precipitation total", data[4]]);
+      tooltip.innerHTML = fields.map(([label, value]) => `<div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(String(value ?? "Unavailable"))}</span></div>`).join("");
+      tooltip.classList.remove("is-hidden");
+      const bounds = element.getBoundingClientRect();
+      const x = event.event?.clientX ?? bounds.right;
+      const y = event.event?.clientY ?? bounds.top;
+      tooltip.style.left = `${Math.max(8, Math.min(x + 14, window.innerWidth - tooltip.offsetWidth - 8))}px`;
+      tooltip.style.top = `${Math.max(8, Math.min(y + 14, window.innerHeight - tooltip.offsetHeight - 8))}px`;
+    });
+    element.on("plotly_unhover", () => tooltip.classList.add("is-hidden"));
+  }
+
+  let streamPage = 0;
+  const streamPageSize = 8;
+
+  function chartLayout(kind, figure) {
+    const heatmap = figure.data.find(trace => trace.type === "heatmap");
+    const stationCount = kind === "stream" ? (heatmap?.y?.length || 0) : 0;
+    const axis = (original, title) => ({
+      ...original, automargin: true, nticks: 4,
+      tickfont: {size: 11},
+      title: {...original?.title, ...(title ? {text: title} : {}), standoff: 10}
+    });
+    const layout = {
+      ...figure.layout, autosize: true, width: undefined,
+      height: kind === "stream" ? Math.max(280, Math.min(stationCount, streamPageSize) * 42 + 180) : kind === "interpolation" ? 440 : 380,
+      margin: {l: kind === "stream" ? 110 : 48, r: kind === "stream" ? 14 : kind === "trend" ? 48 : 42, t: 35, b: kind === "stream" ? 140 : kind === "trend" ? 95 : 65},
+      title: {...figure.layout.title, text: ""},
+      font: {family: "Manrope, sans-serif", size: 12},
+      legend: {...figure.layout.legend, orientation: "h", x: 0, xanchor: "left", y: -0.26, yanchor: "top", font: {size: 10}},
+      hoverlabel: {bgcolor: "#ffffff", bordercolor: "#0f766e", font: {family: "Manrope, sans-serif", size: 12, color: "#162020"}},
+      xaxis: axis(figure.layout.xaxis),
+      yaxis: axis(figure.layout.yaxis)
+    };
+    if (kind === "trend") {
+      layout.annotations = (layout.annotations || []).filter(annotation => !annotation.text.startsWith("Precipitation unavailable"));
+      layout.yaxis2 = axis(figure.layout.yaxis2);
+      layout.yaxis.tickformat = ".4~g";
+      layout.yaxis2.tickformat = ".4~g";
+    } else if (kind === "distribution") {
+      layout.yaxis.tickformat = ".4~g";
+    } else if (kind === "stream" && heatmap) {
+      layout.yaxis.title.text = "";
+      layout.yaxis.autorange = false;
+      layout.yaxis.range = [Math.min(stationCount, (streamPage + 1) * streamPageSize) - 0.5, streamPage * streamPageSize - 0.5];
+      layout.xaxis.title.standoff = 8;
+      layout.yaxis.tickmode = "array";
+      layout.yaxis.tickvals = heatmap.y;
+      layout.yaxis.ticktext = heatmap.y.map(name => escapeHtml(String(name).length > 18 ? String(name).slice(0, 17) + "..." : String(name)));
+    } else if (kind === "interpolation") {
+      layout.xaxis.constrain = "domain";
+      layout.xaxis.tickformat = ".3f";
+      layout.yaxis.tickformat = ".3f";
+      layout.yaxis.scaleanchor = "x";
+      layout.yaxis.scaleratio = 1;
+      layout.yaxis.constrain = "domain";
+    }
+    // Keep color bars clear of the plot and prevent large values from taking over the margin.
+    figure.data.forEach(trace => {
+      if (trace.type === "scatter" && trace.mode?.includes("markers")) {
+        const count = trace.x?.length || 0;
+        trace.marker = {...trace.marker, size: count > 300 ? 3 : count > 60 ? 4 : 6, opacity: count > 300 ? 0.35 : 0.8};
+      }
+      if (kind === "trend" && trace.yaxis !== "y2") {
+        const variant = String(trace.name).match(/\((Min|Max)\)$/i);
+        if (state.selectedLocation) trace.name = variant ? `Reported ${variant[1]}` : "Measured value";
+      }
+      if (trace.colorbar) trace.colorbar = {...trace.colorbar, thickness: 12, len: 0.8, x: 1.02, tickformat: ".3~g", tickfont: {size: 12}};
+    });
+    if (kind === "stream" && heatmap) {
+      layout.legend = {...layout.legend, y: -0.65, font: {size: 10}};
+      heatmap.xgap = 2;
+      heatmap.ygap = 2;
+      heatmap.textfont = {size: 10};
+      if (heatmap.x.length > 8) heatmap.texttemplate = "";
+      heatmap.colorbar = {...heatmap.colorbar, orientation: "h", x: 0.5, xanchor: "center", y: -0.27,
+        yanchor: "top", len: 1, thickness: 10, title: {text: "Value", side: "bottom", font: {size: 10}}, nticks: 3};
+    }
+    return layout;
+  }
+
+  async function renderLibraryFigure(kind, element, empty) {
+    if (!element) return;
+    document.getElementById(`${kind}-tooltip`)?.classList.add("is-hidden");
+    if (!dashboardData.datasetId || !state.selectedParameter) {
+      clearLibraryFigure(kind, element, empty, "Import a CSV and select a parameter.");
+      return;
+    }
+    figureRequests.get(kind)?.abort();
+    const controller = new AbortController();
+    figureRequests.set(kind, controller);
+    const query = new URLSearchParams({
+      id: dashboardData.datasetId, kind, parameter: state.selectedParameter,
+      year: String(state.selectedYear), grouping: state.boxplotGrouping || "year"
+    });
+    if (kind !== "stream" && kind !== "interpolation" && state.selectedLocation) query.set("location", state.selectedLocation);
+    const month = MONTH_OPTIONS.find(item => item.key === state.selectedPeriod);
+    if (month && kind !== "interpolation") query.set("month", String(month.monthIndex));
+    if (empty) {
+      empty.textContent = "Loading visualization...";
+      empty.classList.remove("is-hidden");
+    }
+    if (kind === "distribution") els.boxplotTooltip?.classList.add("is-hidden");
+    element.setAttribute("aria-busy", "true");
+    try {
+      const response = await fetch(`/api/figure?${query}`, {signal: controller.signal});
+      const figure = await response.json();
+      if (!response.ok) throw new Error(figure.error || "Could not load chart.");
+      if (figureRequests.get(kind) !== controller) return;
+      if (!window.Plotly) throw new Error("Plotly could not load. Please refresh the dashboard.");
+      if (empty) empty.classList.add("is-hidden");
+      element.style.visibility = "visible";
+      element.classList.remove("is-hidden");
+      if (!element.data) element.replaceChildren();
+      if (kind === "distribution" || kind === "trend") {
+        figure.data.forEach(trace => {
+          trace.hoverinfo = "none";
+          delete trace.hovertemplate;
+        });
+        els.boxplotTooltip?.classList.add("is-hidden");
+      }
+      if (kind === "stream") {
+        figure.data.forEach((trace, index) => { trace.hoverinfo = index === 0 ? "none" : "skip"; delete trace.hovertemplate; });
+        streamPage = 0;
+        const years = figure.data.find(trace => trace.type === "heatmap")?.x?.length || 0;
+        element.style.minWidth = `${Math.max(0, years * 42 + 130)}px`;
+      }
+      if (kind === "distribution") {
+        const groups = figure.layout.meta?.boxplotStatistics?.length || 0;
+        element.style.minWidth = groups > 4 ? `${groups * 65 + 90}px` : "0";
+      }
+      const rangeNote = document.getElementById("range-note");
+      rangeNote.hidden = !figure.layout.meta?.rangeNote;
+      rangeNote.textContent = figure.layout.meta?.rangeNote || "";
+      const layout = chartLayout(kind, figure);
+      if (kind === "stream") element.style.height = `${layout.height}px`;
+      await Plotly.react(element, figure.data, layout, {
+        responsive: true, displaylogo: false, displayModeBar: true,
+        modeBarButtonsToRemove: ["select2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d"],
+        toImageButtonOptions: {format: "png", filename: `${kind}-${state.selectedParameter}`, width: 1400, height: 900, scale: 2}
+      });
+      if (kind === "stream") {
+        installTrendHover(element, "stream");
+        const count = figure.data.find(trace => trace.type === "heatmap")?.y?.length || 0;
+        const pager = document.getElementById("stream-pagination");
+        pager.hidden = count <= streamPageSize;
+        const updatePage = () => {
+          document.getElementById("stream-tooltip")?.classList.add("is-hidden");
+          document.getElementById("stream-page-label").textContent = `${streamPage * streamPageSize + 1}-${Math.min(count, (streamPage + 1) * streamPageSize)} of ${count} stations`;
+          document.getElementById("stream-prev").disabled = streamPage === 0;
+          document.getElementById("stream-next").disabled = (streamPage + 1) * streamPageSize >= count;
+          Plotly.relayout(element, {"yaxis.range": [Math.min(count, (streamPage + 1) * streamPageSize) - 0.5, streamPage * streamPageSize - 0.5]});
+        };
+        document.getElementById("stream-prev").onclick = () => { streamPage--; updatePage(); };
+        document.getElementById("stream-next").onclick = () => { streamPage++; updatePage(); };
+        if (count) updatePage();
+      }
+      if (kind === "distribution") installBoxplotHover(element, figure.layout.meta?.boxplotStatistics || []);
+      if (kind === "trend") {
+        installTrendHover(element);
+        els.weatherStatus.textContent = figure.layout.meta?.precipitationStatus || (figure.data.some(trace => trace.yaxis === "y2") ? "Precipitation (mm)" : "Precipitation unavailable");
+        element.removeAllListeners("plotly_click");
+        element.on("plotly_click", event => {
+          const details = event.points[0]?.customdata;
+          const record = getTimelineRecords().find(item => item.date === details?.[1]);
+          if (record) {
+            state.selectedTimelineKey = record.timelineKey;
+            els.valueSummary.textContent = `${formatValue(record)} on ${record.timelineLabel || record.dateLabel}`;
+            refreshParameterScale();
+            refreshInterpolationOverlay();
+          }
+        });
+      }
+    } catch (error) {
+      if (error.name !== "AbortError" && figureRequests.get(kind) === controller) {
+        clearLibraryFigure(kind, element, empty, error.message);
+      }
+    } finally {
+      if (figureRequests.get(kind) === controller) element.removeAttribute("aria-busy");
+    }
+  }
+
+  // Index every location by name so later functions can retrieve metadata quickly.
   dashboardData.locations.forEach((location) => {
     locationIndex.set(location.name, location);
   });
 
+  // Group raw measurement rows by location; most UI features work from this grouped shape.
   dashboardData.records.forEach((record) => {
     const key = record.locationGroup;
     if (!groupedRecords.has(key)) {
@@ -203,32 +526,43 @@
     groupedRecords.get(key).push(record);
   });
 
+  // Keep each location's records in chronological order for charting and "latest value" lookups.
   groupedRecords.forEach((records) => {
     records.sort((a, b) => a.sortKey - b.sortKey || a.fileName.localeCompare(b.fileName));
   });
 
+  // Only mapped locations can appear as markers on the Leaflet map.
   const mappedLocations = dashboardData.locations.filter((location) => location.hasCoordinates);
   const defaultLocation = mappedLocations[0] || dashboardData.locations[0];
   populateLocationSelect(mappedLocations);
 
   const inferredLocationCount = dashboardData.locations.filter((location) => location.coordinateInferred).length;
   els.mappedCount.textContent = String(dashboardData.summary.mappedLocationCount);
-  els.mapNote.textContent = `${dashboardData.summary.mappedLocationCount} mapped locations come directly from the latitude/longitude fields in the dataset CSVs. ${inferredLocationCount} location(s) currently use inferred coordinates pending verification. ${dashboardData.summary.unmappedLocationCount} location(s) remain off-map because no coordinates were available.`;
+  if (els.mapNote) {
+    els.mapNote.textContent = `${dashboardData.summary.mappedLocationCount} mapped locations come directly from the latitude/longitude fields in the dataset CSVs. ${inferredLocationCount} location(s) currently use inferred coordinates pending verification. ${dashboardData.summary.unmappedLocationCount} location(s) remain off-map because no coordinates were available.`;
+  }
 
+  // Create the Leaflet map and a custom pane for raster interpolation overlays.
   const map = L.map("map", {
     zoomControl: true,
     scrollWheelZoom: true,
   });
+  syncMapOverlayOffsets();
+  window.addEventListener("resize", syncMapOverlayOffsets);
+  map.createPane("interpolationPane");
+  map.getPane("interpolationPane").style.zIndex = "350";
+  map.getPane("interpolationPane").style.pointerEvents = "none";
 
+  // Basemap choices exposed in the UI.
   const baseLayers = {
-    osm: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    osm: L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }),
-    minimal: L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
-      maxZoom: 20,
-      subdomains: "abcd",
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    minimal: L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      className: "minimal-basemap",
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }),
     satellite: L.layerGroup([
       L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
@@ -259,15 +593,62 @@
     });
   });
 
+  document.getElementById("show-stations").addEventListener("change", event => {
+    markers.forEach(marker => event.target.checked ? marker.addTo(map) : map.removeLayer(marker));
+  });
+  document.getElementById("view-interpolation").addEventListener("click", async () => {
+    interpolationEnabled = true;
+    document.getElementById("map-interpolation-toggle").checked = true;
+    await loadInterpolationData();
+    refreshInterpolationOverlay();
+    const surface = getInterpolationSurface();
+    const point = surface?.samplePoints?.find(item => item.location === state.selectedLocation) || surface?.samplePoints?.[0];
+    if (!point) return;
+    document.getElementById("show-stations").checked = false;
+    markers.forEach(marker => map.removeLayer(marker));
+    map.closePopup();
+    map.setView([point.latitude, point.longitude], 10);
+  });
+
+  // Visually marks the currently active basemap button.
+  document.getElementById("map-interpolation-toggle").addEventListener("change", event => {
+    interpolationEnabled = event.target.checked;
+    if (interpolationEnabled && !interpolationData) loadInterpolationData().then(refreshInterpolationOverlay);
+    refreshInterpolationOverlay();
+  });
+
   function refreshBaseMapButtons() {
     els.basemapToggle.querySelectorAll("[data-basemap]").forEach((button) => {
       button.classList.toggle("is-active", button.dataset.basemap === state.baseMap);
     });
   }
 
+  function syncMapOverlayOffsets() {
+    const mapArea = document.querySelector(".map-area");
+    const mapToolbar = document.querySelector(".map-toolbar");
+    if (!mapArea || !mapToolbar) {
+      return;
+    }
+
+    mapArea.style.setProperty("--map-overlay-top", `${Math.round(mapToolbar.offsetHeight + 28)}px`);
+  }
+
   refreshBaseMapButtons();
+  if (els.boxplotGrouping) {
+    els.boxplotGrouping.querySelectorAll("[data-boxplot-grouping]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.boxplotGrouping = button.dataset.boxplotGrouping;
+        els.boxplotGrouping.querySelectorAll("[data-boxplot-grouping]").forEach((item) => {
+          item.classList.toggle("is-active", item === button);
+        });
+        refreshBoxplot();
+      });
+    });
+  }
   renderUseCaseTabs();
-  initializeStreamTooltip();
+  loadInterpolationData().then(() => {
+    refreshInterpolationOverlay();
+  });
   if (mappedLocations.length) {
     const bounds = L.latLngBounds(mappedLocations.map((location) => [location.latitude, location.longitude]));
     map.fitBounds(bounds, {
@@ -276,16 +657,17 @@
       maxZoom: 11,
     });
   } else {
-    map.setView([30.7, 76.75], 10);
+    map.setView([20, 0], 2);
   }
 
+  // Create one clickable marker per mapped location.
   mappedLocations.forEach((location) => {
     const isStp = isSewageTreatmentPlant(location.name);
     const marker = L.circleMarker([location.latitude, location.longitude], {
       radius: 8,
       weight: 2,
       color: "#ffffff",
-      fillColor: isStp ? "#d97706" : "#0f766e",
+      fillColor: isStp ? "#d99d06" : "#0f766e",
       fillOpacity: 0.92,
     }).addTo(map);
 
@@ -300,16 +682,42 @@
       opacity: 1,
     });
 
-    marker.on("click", () => {
+    marker.on("click", (event) => {
+      if (event.originalEvent) {
+        L.DomEvent.stopPropagation(event.originalEvent);
+      }
       selectLocation(location.name, { focusMap: true });
     });
 
     markers.set(location.name, marker);
   });
 
+  // Query the active Python-generated interpolation grid at a clicked map position.
+  map.on("click", (event) => {
+    if (!interpolationEnabled) return;
+    const estimate = getInterpolationEstimateAt(event.latlng);
+    if (!estimate) return;
+    const periodLabel = estimate.surface.year == null
+      ? "All available years"
+      : String(estimate.surface.year);
+    L.popup({ className: "interpolation-value-popup", maxWidth: 260 })
+      .setLatLng(event.latlng)
+      .setContent([
+        '<div class="interpolation-estimate">',
+        '<strong>Interpolated estimate</strong>',
+        `<span>${escapeHtml(estimate.surface.parameterFamily || estimate.surface.parameter)}</span>`,
+        `<b>${escapeHtml(formatCompactNumber(estimate.value))}${estimate.surface.unit ? ` ${escapeHtml(estimate.surface.unit)}` : ""}</b>`,
+        `<small>Period: ${escapeHtml(periodLabel)}</small>`,
+        '<small>Estimated by Python ordinary kriging; this is not an observed sample.</small>',
+        '</div>',
+      ].join(""))
+      .openOn(map);
+  });
+
   refreshSuitabilitySummary();
   refreshParameterScale();
 
+  // Fill the station dropdown and wire it to the main selection flow.
   function populateLocationSelect(locations) {
     if (!els.locationSelect) {
       return;
@@ -329,6 +737,7 @@
     });
   }
 
+  // Draw the four use-case buttons and refresh dependent UI on click.
   function renderUseCaseTabs() {
     if (!els.useCaseTabs) {
       return;
@@ -351,6 +760,7 @@
     });
   }
 
+  // Recompute the pass/caution/fail counts for all mapped locations.
   function refreshSuitabilitySummary() {
     if (!els.suitabilitySummary) {
       return;
@@ -373,6 +783,7 @@
     refreshSuitabilityDetail();
   }
 
+  // Show how much of the screening result is based on confirmed vs proxy vs missing inputs.
   function refreshSuitabilityDetail() {
     if (!els.suitabilityDetail) {
       return;
@@ -391,6 +802,7 @@
     els.suitabilityDetail.textContent = `${state.selectedLocation}: ${confirmed} confirmed, ${proxy} proxy-only, ${missing} missing checks.${proxyText}`;
   }
 
+  // Convert the current year/month selection into user-friendly text.
   function getSuitabilityFilterLabel() {
     const yearLabel = state.selectedYear === "all" ? "all sampled years" : String(state.selectedYear);
     if (state.selectedPeriod === "annual") {
@@ -401,6 +813,7 @@
     return selectedMonth ? `${selectedMonth.label} within ${yearLabel}` : yearLabel;
   }
 
+  // Run the rule-based screening engine for one location under the current filters/use case.
   function evaluateLocationSuitability(locationName) {
     const sampleRecords = getSuitabilitySampleRecords(locationName);
     if (!sampleRecords.length) {
@@ -428,6 +841,7 @@
     };
   }
 
+  // Suitability is based on the most recent sample that matches the current year/month filter.
   function getSuitabilitySampleRecords(locationName) {
     const locationRecords = filterRecordsBySelectedYear(groupedRecords.get(locationName) || []);
     const selectedMonth = MONTH_OPTIONS.find((month) => month.key === state.selectedPeriod);
@@ -457,6 +871,7 @@
     return sortedEntries[0]?.[1] || [];
   }
 
+  // Pull only the values needed for the selected use case out of the raw sample rows.
   function extractScreeningInputs(records, useCase) {
     const specs = SCREENING_PARAMETER_SPECS[useCase] || [];
     const values = {
@@ -490,6 +905,7 @@
       missing: [],
     };
 
+    // For each required field, prefer confirmed aliases; fall back to proxy coverage reporting.
     specs.forEach((spec) => {
       const confirmedMatch = getParameterMatch(records, spec.confirmed || []);
       if (confirmedMatch) {
@@ -510,6 +926,7 @@
     return { values, coverage };
   }
 
+  // Find the best numeric record whose parameter name matches one of the accepted aliases.
   function getParameterMatch(records, aliases) {
     const aliasSet = new Set(aliases.map((alias) => alias.toLowerCase()));
     if (!aliasSet.size) {
@@ -526,6 +943,7 @@
     return candidates[0] || null;
   }
 
+  // Turns internal screening keys into human-readable labels for the popup/detail text.
   function getCoverageLabel(key, parameterName = "") {
     const friendlyNames = {
       pH: "pH",
@@ -556,6 +974,7 @@
     return parameterName ? `${label} via ${parameterName}` : label;
   }
 
+  // Dispatch to the correct screening rule set.
   function runUseCaseScreening(useCase, values) {
     if (useCase === "human_consumption") {
       return fitForHumanConsumption({
@@ -612,6 +1031,7 @@
     });
   }
 
+  // Collapse the detailed screening result into a simple status used by the UI and map colors.
   function determineSuitabilityStatus(useCase, result) {
     const availableCoreCount = (CORE_KEYS_BY_USE_CASE[useCase] || []).filter((key) => hasCheckedValue(result.checked_values[key])).length;
     if (!availableCoreCount) {
@@ -636,6 +1056,7 @@
     return "Insufficient data";
   }
 
+  // Build the HTML shown when a map marker is opened.
   function buildLocationPopup(locationName) {
     const location = locationIndex.get(locationName);
     const isStp = isSewageTreatmentPlant(locationName);
@@ -660,11 +1081,13 @@
     ].join("");
   }
 
+  // Main controller for station changes. Almost every panel refresh starts here.
   function selectLocation(locationName, options = {}) {
     state.selectedLocation = locationName;
     state.selectedYear = "all";
     const parameters = getLocationParameters(locationName);
 
+    // Handle stations that exist in metadata but do not have usable measurements.
     if (!parameters.length) {
       state.selectedParameter = null;
       renderLocation();
@@ -672,6 +1095,7 @@
       renderParameterTabs([]);
       renderPeriodFilter();
       renderEmptyChart("No parameter data is available for this location.");
+      renderBoxplotEmpty("No parameter distribution is available for this location.");
       return;
     }
 
@@ -686,6 +1110,7 @@
     renderParameterTabs(parameters);
     renderPeriodFilter();
     refreshTrendChart();
+    refreshBoxplot();
     refreshSuitabilitySummary();
     refreshParameterScale();
     refreshMarkerStyles(options.openPopup !== false);
@@ -700,6 +1125,7 @@
     }
   }
 
+  // Center the map on the selected station and open its popup if possible.
   function focusLocationOnMap(locationName) {
     const location = locationIndex.get(locationName);
     const marker = markers.get(locationName);
@@ -715,11 +1141,52 @@
     }
   }
 
+  // Keep the selected parameter valid after the period/year filters change available data.
+  function syncSelectedParameterAvailability() {
+    const parameters = getLocationParameters();
+    if (!parameters.includes(state.selectedParameter)) {
+      state.selectedParameter = parameters[0] ?? null;
+    }
+  }
+
+  // Shared redraw path for parameter changes where weather and suitability do not change.
+  function refreshViewsForParameterChange(parameters) {
+    refreshStreamVisualization();
+    renderParameterTabs(parameters);
+    renderPeriodFilter();
+    refreshTrendChart();
+    refreshBoxplot();
+    refreshParameterScale();
+    updateMapLabels();
+  }
+
+  // Shared redraw path for time filter changes that affect more of the dashboard.
+  function refreshViewsForTimeFilterChange(options = {}) {
+    const { includeWeather = false } = options;
+    syncSelectedParameterAvailability();
+    syncSelectedYearForParameter();
+    syncPeriodSelection();
+    renderParameterTabs(getLocationParameters());
+    renderPeriodFilter();
+    refreshTrendChart();
+    refreshBoxplot();
+    refreshStreamVisualization();
+    if (includeWeather) {
+      refreshWeatherChart();
+    }
+    refreshSuitabilitySummary();
+    refreshParameterScale();
+    refreshMarkerStyles(false);
+    updateMapLabels();
+  }
+
+  // Raw records for the currently selected location + parameter family.
   function getParameterRecords() {
     const records = groupedRecords.get(state.selectedLocation) || [];
     return records.filter((record) => getParameterFamily(record.parameter) === state.selectedParameter);
   }
 
+  // All parameter families observed at the chosen location.
   function getLocationParameters(locationName = state.selectedLocation) {
     const records = groupedRecords.get(locationName) || [];
     return Array.from(new Set(
@@ -729,8 +1196,9 @@
     )).sort((a, b) => a.localeCompare(b));
   }
 
+  // All parameter families observed at the chosen location that have usable values.
   function getAvailableParameters(locationName = state.selectedLocation) {
-    const records = filterRecordsBySelectedYear(groupedRecords.get(locationName) || []);
+    const records = groupedRecords.get(locationName) || [];
 
     return Array.from(new Set(
       records
@@ -738,18 +1206,24 @@
           if (!record.parameter || (!record.rawValue && !Number.isFinite(record.numericValue))) {
             return false;
           }
-
-          if (state.selectedPeriod === "annual") {
-            return true;
-          }
-
-          const option = MONTH_OPTIONS.find((month) => month.key === state.selectedPeriod);
-          return option ? record.monthIndex === option.monthIndex : true;
+          return true;
         })
         .map((record) => getParameterFamily(record.parameter))
     )).sort((a, b) => a.localeCompare(b));
   }
 
+  function getAvailableYearsForParameter(locationName = state.selectedLocation, parameter = state.selectedParameter) {
+    const records = (groupedRecords.get(locationName) || [])
+      .filter((record) => getParameterFamily(record.parameter) === parameter);
+
+    return Array.from(new Set(
+      records
+        .map((record) => record.year)
+        .filter((year) => Number.isFinite(year) && year > 0)
+    )).sort((a, b) => a - b);
+  }
+
+  // Build the series the trend chart should currently plot.
   function getTimelineRecords() {
     const records = filterRecordsBySelectedYear(getParameterRecords());
 
@@ -772,6 +1246,7 @@
       }));
   }
 
+  // Merge monthly records with annual fallback values into one ordered chart series.
   function buildTrendSeries(records) {
     const monthlyRecords = records
       .filter((record) => record.monthIndex > 0)
@@ -783,6 +1258,7 @@
         timelineMeta: record.source || record.fileName,
       }));
 
+    // If a year already has monthly rows, we suppress duplicate annual rows for that year.
     const yearsWithMonthlyData = new Set(monthlyRecords.map((record) => record.year));
     const yearlyFallbackRecords = records
       .filter((record) => !record.monthIndex && !yearsWithMonthlyData.has(record.year))
@@ -813,12 +1289,23 @@
     return buildYearlySeries(getParameterRecords());
   }
 
+  // Keep the selected point valid, redraw the chart, then sync the interpolation overlay.
   function refreshTrendChart() {
     const trendRecords = getTimelineRecords();
     if (!trendRecords.some((record) => record.timelineKey === state.selectedTimelineKey)) {
       state.selectedTimelineKey = trendRecords[trendRecords.length - 1]?.timelineKey ?? null;
     }
     renderTrendChart(trendRecords);
+    refreshInterpolationOverlay();
+  }
+
+  // Draw Python-calculated five-number summaries for the active station/parameter.
+  function refreshBoxplot() {
+    renderLibraryFigure("distribution", els.boxplotChart, els.boxplotEmpty);
+  }
+
+  function renderBoxplotEmpty(message) {
+    clearLibraryFigure("distribution", els.boxplotChart, els.boxplotEmpty, message);
   }
 
   function renderLocation() {
@@ -846,138 +1333,14 @@
     }
   }
 
+  // Render the stream-style heatmap comparing yearly values across mapped points.
   function refreshStreamVisualization() {
-    if (!els.streamVisualization || !els.streamStatus) {
-      return;
-    }
-
-    hideStreamTooltip();
-    if (!state.selectedParameter) {
-      renderStreamVisualizationEmpty("Select a parameter to compare yearly values along the stream.", "Select parameter");
-      return;
-    }
-
-    const years = getAllAvailableYears();
-    const locations = getStreamVisualizationLocations();
-    const rows = locations
-      .map((location) => buildStreamVisualizationRow(location.name, years))
-      .filter((row) => row.cells.some((cell) => Number.isFinite(cell.value)));
-
-    if (!rows.length) {
-      renderStreamVisualizationEmpty("No yearly values are available for this parameter across the mapped points.", state.selectedParameter);
-      return;
-    }
-
-    const values = rows.flatMap((row) => row.cells.map((cell) => cell.value)).filter((value) => Number.isFinite(value));
-    const min = values.length ? Math.min(...values) : 0;
-    const max = values.length ? Math.max(...values) : 0;
-
-    const headerCells = [
-      '<div class="stream-axis stream-axis-corner">Point</div>',
-      ...years.map((year) => `<div class="stream-axis">${escapeHtml(String(year))}</div>`),
-    ];
-
-    const bodyCells = rows.flatMap((row) => {
-      const rowLabelClass = row.name === state.selectedLocation ? "stream-row-label is-active" : "stream-row-label";
-      const rowLabel = `<div class="${rowLabelClass}">${escapeHtml(getMapLabelName(row.name))}</div>`;
-      const valueCells = row.cells.map((cell) => {
-        const intensity = getHeatmapIntensity(cell.value, min, max);
-        const tooltip = cell.record
-          ? `${row.name} | ${cell.year}: ${formatValue(cell.record)}`
-          : `${row.name} | ${cell.year}: No data`;
-        return `<div class="stream-cell${cell.record ? "" : " is-empty"}" style="--stream-intensity:${intensity}" data-tooltip="${escapeHtml(tooltip)}" aria-label="${escapeHtml(tooltip)}" tabindex="0"></div>`;
-      });
-      return [rowLabel, ...valueCells];
-    });
-
-    els.streamVisualization.style.setProperty("--stream-year-count", String(years.length));
-    els.streamVisualization.innerHTML = [...headerCells, ...bodyCells].join("");
-    els.streamStatus.textContent = state.selectedParameter;
+    renderLibraryFigure("stream", els.streamVisualization, null);
+    if (els.streamStatus) els.streamStatus.textContent = state.selectedParameter || "Select parameter";
   }
 
-  function renderStreamVisualizationEmpty(message, status = "Select parameter") {
-    if (!els.streamVisualization || !els.streamStatus) {
-      return;
-    }
-
-    hideStreamTooltip();
-    els.streamVisualization.style.removeProperty("--stream-year-count");
-    els.streamVisualization.innerHTML = `<div class="stream-empty">${escapeHtml(message)}</div>`;
-    els.streamStatus.textContent = status;
-  }
-
-  function initializeStreamTooltip() {
-    if (!els.streamVisualization) {
-      return;
-    }
-
-    streamTooltipEl = document.createElement("div");
-    streamTooltipEl.className = "stream-hover-tooltip";
-    streamTooltipEl.setAttribute("role", "tooltip");
-    document.body.appendChild(streamTooltipEl);
-
-    els.streamVisualization.addEventListener("mousemove", (event) => {
-      const cell = event.target.closest(".stream-cell");
-      if (!cell || !els.streamVisualization.contains(cell)) {
-        hideStreamTooltip();
-        return;
-      }
-
-      showStreamTooltip(cell.dataset.tooltip || "", {
-        x: event.clientX,
-        y: event.clientY,
-      });
-    });
-
-    els.streamVisualization.addEventListener("mouseleave", hideStreamTooltip);
-
-    els.streamVisualization.addEventListener("focusin", (event) => {
-      const cell = event.target.closest(".stream-cell");
-      if (!cell || !els.streamVisualization.contains(cell)) {
-        return;
-      }
-
-      const rect = cell.getBoundingClientRect();
-      showStreamTooltip(cell.dataset.tooltip || "", {
-        x: rect.left + (rect.width / 2),
-        y: rect.top,
-      });
-    });
-
-    els.streamVisualization.addEventListener("focusout", hideStreamTooltip);
-    window.addEventListener("scroll", hideStreamTooltip, { passive: true });
-    window.addEventListener("resize", hideStreamTooltip);
-  }
-
-  function showStreamTooltip(text, point) {
-    if (!streamTooltipEl || !text) {
-      return;
-    }
-
-    streamTooltipEl.textContent = text;
-    streamTooltipEl.classList.add("is-visible");
-
-    const tooltipRect = streamTooltipEl.getBoundingClientRect();
-    const margin = 12;
-    const desiredLeft = point.x + 14;
-    const maxLeft = window.innerWidth - tooltipRect.width - margin;
-    const left = Math.min(Math.max(margin, desiredLeft), Math.max(margin, maxLeft));
-
-    let top = point.y - tooltipRect.height - 14;
-    if (top < margin) {
-      top = Math.min(window.innerHeight - tooltipRect.height - margin, point.y + 18);
-    }
-
-    streamTooltipEl.style.left = `${left}px`;
-    streamTooltipEl.style.top = `${Math.max(margin, top)}px`;
-  }
-
-  function hideStreamTooltip() {
-    if (!streamTooltipEl) {
-      return;
-    }
-
-    streamTooltipEl.classList.remove("is-visible");
+  function renderStreamVisualizationEmpty(message) {
+    clearLibraryFigure("stream", els.streamVisualization, null, message);
   }
 
   function getAllAvailableYears() {
@@ -988,330 +1351,48 @@
     )).sort((a, b) => a - b);
   }
 
-  function getStreamVisualizationLocations() {
-    return dashboardData.locations
-      .filter((location) => location.hasCoordinates)
-      .slice()
-      .sort((a, b) => a.name.localeCompare(b.name));
+  function refreshWeatherChart() {
+    // The library supplies precipitation alongside the parameter trend.
   }
 
-  function buildStreamVisualizationRow(locationName, years) {
-    const records = groupedRecords.get(locationName) || [];
-    const parameterRecords = records.filter((record) => getParameterFamily(record.parameter) === state.selectedParameter);
-    const yearlySeries = buildYearlySeries(parameterRecords);
-    const yearlyMap = new Map(yearlySeries.map((record) => [record.year, record]));
-
-    return {
-      name: locationName,
-      cells: years.map((year) => {
-        const record = yearlyMap.get(year) || null;
-        return {
-          year,
-          record,
-          value: record?.numericValue ?? null,
-        };
-      }),
-    };
-  }
-
-  async function refreshWeatherChart() {
-    const location = locationIndex.get(state.selectedLocation);
-    if (!location?.hasCoordinates || !els.weatherChart || !els.weatherStatus || !els.weatherEmpty) {
-      renderWeatherChartEmpty("Weather coordinates are not available for this location.", "No coordinates");
-      return;
-    }
-
-    const years = getAvailableYears(state.selectedLocation);
-    if (!years.length) {
-      renderWeatherChartEmpty("No sampled years are available for this location.", "No years");
-      return;
-    }
-
-    const cacheKey = `${location.latitude}|${location.longitude}|${years[0]}|${years[years.length - 1]}`;
-    els.weatherStatus.textContent = "Loading";
-    renderWeatherChartEmpty("Loading historical weather data...");
-
-    try {
-      let data = weatherCache.get(cacheKey);
-      if (!data) {
-        data = await fetchWeatherChartData(location, years);
-        weatherCache.set(cacheKey, data);
-      }
-
-      renderWeatherChart(data);
-    } catch (error) {
-      renderWeatherChartEmpty("Unable to load weather data from the historical API.", "Weather unavailable");
-    }
-  }
-
-  async function fetchWeatherChartData(location, years) {
-    const startYear = years[0];
-    const endYear = years[years.length - 1];
-    const params = new URLSearchParams({
-      latitude: String(location.latitude),
-      longitude: String(location.longitude),
-      start_date: `${startYear}-01-01`,
-      end_date: `${endYear}-12-31`,
-      daily: "precipitation_sum",
-      timezone: "auto",
-    });
-
-    const response = await fetch(`/weather-history?${params.toString()}`);
-    if (!response.ok) {
-      throw new Error(`Weather API request failed with status ${response.status}`);
-    }
-
-    const payload = await response.json();
-    return buildWeatherChartData(payload, years);
-  }
-
-  function buildWeatherChartData(payload, years) {
-    const daily = payload?.daily;
-    if (!daily || !Array.isArray(daily.time)) {
-      throw new Error("Weather API did not return daily data.");
-    }
-
-    const byYear = new Map();
-    years.forEach((year) => {
-      byYear.set(year, new Map(WEATHER_MONTHS.map((month) => [month.key, []])));
-    });
-
-    daily.time.forEach((dateText, index) => {
-      const year = Number.parseInt(String(dateText).slice(0, 4), 10);
-      const month = Number.parseInt(String(dateText).slice(5, 7), 10);
-      if (!byYear.has(year)) {
-        return;
-      }
-
-      const precipitationSeries = daily.precipitation_sum;
-      const value = Array.isArray(precipitationSeries) ? precipitationSeries[index] : null;
-      if (Number.isFinite(value) && byYear.get(year).has(month)) {
-        byYear.get(year).get(month).push(value);
-      }
-    });
-
-    return {
-      monthlyAverage: WEATHER_MONTHS.map((month) => ({
-        ...month,
-        value: aggregateWeatherMetric(
-          years.map((year) => aggregateWeatherMetric(byYear.get(year).get(month.key), "sum")).filter((value) => Number.isFinite(value)),
-          "mean"
-        ),
-      })),
-      rows: years.map((year) => ({
-        year,
-        months: WEATHER_MONTHS.map((month) => ({
-          ...month,
-          value: aggregateWeatherMetric(byYear.get(year).get(month.key), "sum"),
-        })),
-      })),
-    };
-  }
-
-  function aggregateWeatherMetric(values, mode) {
-    if (!values.length) {
-      return null;
-    }
-
-    if (mode === "sum") {
-      return values.reduce((sum, value) => sum + value, 0);
-    }
-
-    return values.reduce((sum, value) => sum + value, 0) / values.length;
-  }
-
-  function renderWeatherChart(data) {
-    if (!els.weatherChart || !els.weatherStatus || !els.weatherEmpty) {
-      return;
-    }
-
-    const rows = data?.rows || [];
-    if (!rows.length) {
-      renderWeatherChartEmpty("No weather data available for the sampled years.", "No weather");
-      return;
-    }
-
-    const chartSeries = getWeatherChartSeries(data);
-    const chartPoints = chartSeries.filter((point) => Number.isFinite(point.value));
-
-    if (!chartPoints.length) {
-      renderWeatherChartEmpty("No monthly precipitation data is available for the selected year.", "No weather");
-      return;
-    }
-
-    if (!chartPoints.some((point) => point.key === state.selectedWeatherMonthKey)) {
-      state.selectedWeatherMonthKey = chartPoints[chartPoints.length - 1]?.key ?? null;
-    }
-
-    const selectedPoint = chartPoints.find((point) => point.key === state.selectedWeatherMonthKey) || chartPoints[chartPoints.length - 1];
-    const pointRadii = chartSeries.map((point) => (point.key === selectedPoint.key ? 7 : 5));
-    const pointColors = chartSeries.map((point) => (point.key === selectedPoint.key ? "#d97706" : "#0f766e"));
-
-    if (weatherChartInstance) {
-      weatherChartInstance.destroy();
-    }
-
-    els.weatherEmpty.textContent = "";
-    els.weatherEmpty.classList.add("is-hidden");
-    els.weatherChart.style.visibility = "visible";
-
-    const context = els.weatherChart.getContext("2d");
-    weatherChartInstance = new window.Chart(context, {
-      type: "line",
-      data: {
-        labels: chartSeries.map((point) => point.label),
-        datasets: [
-          {
-            data: chartSeries.map((point) => point.value),
-            borderColor: "#0f766e",
-            backgroundColor: "rgba(15, 118, 110, 0.14)",
-            borderWidth: 4,
-            fill: true,
-            tension: 0.32,
-            pointRadius: pointRadii,
-            pointHoverRadius: pointRadii.map((radius) => radius + 2),
-            pointHitRadius: 18,
-            pointBackgroundColor: pointColors,
-            pointBorderColor: "#ffffff",
-            pointBorderWidth: 3,
-            spanGaps: false,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        interaction: {
-          mode: "nearest",
-          intersect: true,
-        },
-        onClick(_event, elements) {
-          const pointIndex = elements[0]?.index;
-          const point = pointIndex == null ? null : chartSeries[pointIndex];
-          if (!point || !Number.isFinite(point.value)) {
-            return;
-          }
-
-          state.selectedWeatherMonthKey = point.key;
-          renderWeatherChart(data);
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: "rgba(22, 32, 32, 0.92)",
-            titleColor: "#f7fffe",
-            bodyColor: "#f7fffe",
-            displayColors: false,
-            callbacks: {
-              title(items) {
-                const index = items[0]?.dataIndex ?? 0;
-                return chartSeries[index]?.label || "";
-              },
-              label(item) {
-                const point = chartSeries[item.dataIndex];
-                if (!point || !Number.isFinite(point.value)) {
-                  return "No data";
-                }
-                return `${formatRainfall(point.value)} precipitation`;
-              },
-              afterLabel() {
-                if (state.selectedPeriod === "annual") {
-                  return state.selectedYear === "all"
-                    ? "Average across available years"
-                    : `Year ${state.selectedYear}`;
-                }
-
-                const selectedMonth = MONTH_OPTIONS.find((month) => month.key === state.selectedPeriod);
-                return selectedMonth ? `${selectedMonth.label} precipitation` : "Monthly precipitation";
-              },
-            },
-          },
-        },
-        scales: buildSharedChartScales((value) => formatRainfall(value, true)),
-      },
-    });
-
-    els.weatherStatus.textContent = `${formatRainfall(selectedPoint.value)} in ${selectedPoint.label}`;
-  }
-
-  function getWeatherChartSeries(data) {
-    const rows = data?.rows || [];
-
-    if (state.selectedPeriod === "annual") {
-      const trendRecords = getTimelineRecords();
-      return trendRecords.map((record) => ({
-        key: record.timelineKey,
-        label: record.timelineLabel || record.dateLabel || String(record.year || ""),
-        value: getWeatherValueForTrendRecord(rows, record),
-      }));
-    }
-
-    const selectedMonth = MONTH_OPTIONS.find((month) => month.key === state.selectedPeriod);
-    if (!selectedMonth) {
-      return [];
-    }
-
-    return rows
-      .filter((row) => state.selectedYear === "all" || row.year === state.selectedYear)
-      .map((row) => {
-        const monthPoint = row.months.find((month) => month.key === selectedMonth.monthIndex);
-        return {
-          key: row.year,
-          label: String(row.year),
-          value: monthPoint?.value ?? null,
-        };
-      });
-  }
-
-  function getWeatherValueForTrendRecord(rows, record) {
-    if (!record || !Number.isFinite(record.year)) {
-      return null;
-    }
-
-    const row = rows.find((candidate) => candidate.year === record.year);
-    if (!row) {
-      return null;
-    }
-
-    if (record.monthIndex > 0) {
-      return row.months.find((month) => month.key === record.monthIndex)?.value ?? null;
-    }
-
-    const monthlyValues = row.months
-      .map((month) => month.value)
-      .filter((value) => Number.isFinite(value));
-
-    if (!monthlyValues.length) {
-      return null;
-    }
-
-    return aggregateWeatherMetric(monthlyValues, "mean");
-  }
-
-  function renderWeatherChartEmpty(message, status = "No data") {
-    if (!els.weatherChart || !els.weatherStatus || !els.weatherEmpty) {
-      return;
-    }
-
-    if (weatherChartInstance) {
-      weatherChartInstance.destroy();
-      weatherChartInstance = null;
-    }
-    els.weatherChart.style.visibility = "hidden";
-    els.weatherEmpty.textContent = message;
-    els.weatherEmpty.classList.remove("is-hidden");
-    els.weatherStatus.textContent = status;
-  }
-
-  function getHeatmapIntensity(value, min, max) {
+  function getDivergingHeatmapStyle(value, min, max) {
     if (!Number.isFinite(value)) {
-      return 0;
+      return "";
     }
+
     if (max === min) {
-      return 0.55;
+      return "--stream-r:248; --stream-g:250; --stream-b:252; --stream-border-r:148; --stream-border-g:163; --stream-border-b:184;";
     }
-    return 0.2 + ((value - min) / (max - min)) * 0.75;
+
+    const normalized = clamp((value - min) / (max - min), 0, 1);
+    const color = getDivergingColor(normalized);
+    const borderPosition = clamp(normalized < 0.5 ? normalized * 0.82 : 0.5 + ((normalized - 0.5) * 1.18), 0, 1);
+    const borderColor = getDivergingColor(borderPosition);
+
+    return [
+      `--stream-r:${color[0]}`,
+      `--stream-g:${color[1]}`,
+      `--stream-b:${color[2]}`,
+      `--stream-border-r:${borderColor[0]}`,
+      `--stream-border-g:${borderColor[1]}`,
+      `--stream-border-b:${borderColor[2]}`,
+    ].join("; ");
+  }
+
+  function getDivergingColor(normalized) {
+    const low = [37, 99, 235];
+    const mid = [248, 250, 252];
+    const high = [220, 38, 38];
+
+    if (normalized <= 0.5) {
+      return interpolateRgb(low, mid, normalized / 0.5);
+    }
+
+    return interpolateRgb(mid, high, (normalized - 0.5) / 0.5);
+  }
+
+  function interpolateRgb(start, end, amount) {
+    return start.map((channel, index) => Math.round(channel + ((end[index] - channel) * amount)));
   }
 
   function formatRainfall(value, compact = false) {
@@ -1323,6 +1404,7 @@
     return `${value.toLocaleString(undefined, { maximumFractionDigits: digits })}${compact ? "" : " mm"}`;
   }
 
+  // Draw the safety scale for the selected parameter under the active use case.
   function refreshParameterScale() {
     if (!els.parameterScale) {
       return;
@@ -1334,7 +1416,8 @@
     }
 
     const parameterKey = getParameterScaleKey(state.selectedParameter);
-    const definition = PARAMETER_SCALE_DEFINITIONS[state.selectedUseCase]?.[parameterKey];
+    const definition = PARAMETER_SCALE_DEFINITIONS[state.selectedUseCase]?.[parameterKey]
+      || GLOBAL_PARAMETER_SCALE_DEFINITIONS[parameterKey];
     const useCaseLabel = USE_CASES.find((item) => item.key === state.selectedUseCase)?.label || "Selected use case";
     if (!definition) {
       els.parameterScale.innerHTML = `<div class="parameter-scale-empty">${escapeHtml(state.selectedParameter)} has no configured screening scale for ${escapeHtml(useCaseLabel.toLowerCase())}.</div>`;
@@ -1343,11 +1426,19 @@
 
     const selectedRecord = getSelectedParameterScaleRecord();
     const currentValue = selectedRecord?.numericValue ?? null;
+    // Expand the visual domain enough to show both the threshold band and the current value.
     const scaleDomain = buildParameterScaleDomain(definition, currentValue);
     const markerPosition = Number.isFinite(currentValue)
       ? clamp(((currentValue - scaleDomain.min) / (scaleDomain.max - scaleDomain.min || 1)) * 100, 0, 100)
       : null;
-    const safeStart = getScalePercent(definition.type === "min" ? definition.safeMin : scaleDomain.min, scaleDomain);
+    const safeStart = getScalePercent(
+      definition.type === "range"
+        ? definition.safeMin
+        : definition.type === "min"
+          ? definition.safeMin
+          : scaleDomain.min,
+      scaleDomain
+    );
     const safeEnd = getScalePercent(
       definition.type === "range"
         ? definition.safeMax
@@ -1356,6 +1447,10 @@
           : scaleDomain.max,
       scaleDomain
     );
+    const safeBandStart = definition.type === "max" && definition.safeMax === 0 ? 0 : safeStart;
+    const safeBandEnd = definition.type === "max" && definition.safeMax === 0
+      ? Math.max(safeEnd, 1.2)
+      : safeEnd;
     const valueStatus = getParameterScaleStatus(definition, currentValue);
     const valueTone = valueStatus === "safe" ? "is-safe" : "is-unsafe";
     const unitLabel = definition.unit || getParameterScaleUnit(selectedRecord);
@@ -1387,8 +1482,9 @@
       <div class="parameter-scale-threshold">${escapeHtml(thresholdText)}</div>
       <div class="parameter-scale-track">
         ${definition.type !== "min" ? `<span class="parameter-scale-band is-unsafe-left" style="width:${Math.max(0, safeStart)}%"></span>` : ""}
-        <span class="parameter-scale-band is-safe" style="left:${safeStart}%; width:${Math.max(0, safeEnd - safeStart)}%"></span>
+        <span class="parameter-scale-band is-safe" style="left:${safeBandStart}%; width:${Math.max(0, safeBandEnd - safeBandStart)}%"></span>
         ${definition.type !== "max" ? `<span class="parameter-scale-band is-unsafe-right" style="left:${safeEnd}%; width:${Math.max(0, 100 - safeEnd)}%"></span>` : ""}
+        ${definition.type === "max" ? `<span class="parameter-scale-band is-unsafe-right" style="left:${safeBandEnd}%; width:${Math.max(0, 100 - safeBandEnd)}%"></span>` : ""}
         ${markerPosition == null ? "" : `<span class="parameter-scale-marker ${valueTone}" style="left:${markerPosition}%"></span>`}
       </div>
       <div class="parameter-scale-axis">${renderedTicks.map((tick) => `<span style="left:${tick.position}%">${escapeHtml(formatCompactNumber(tick.value))}</span>`).join("")}</div>
@@ -1405,6 +1501,7 @@
     return trendRecords.find((record) => record.timelineKey === state.selectedTimelineKey) || trendRecords[trendRecords.length - 1];
   }
 
+  // Normalize parameter labels from the CSV into one internal key used by scale definitions.
   function getParameterScaleKey(parameterName) {
     const clean = String(parameterName || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     if (clean === "ph") return "ph";
@@ -1432,6 +1529,7 @@
     return record?.unit ? String(record.unit) : "";
   }
 
+  // Choose a chart-like domain that keeps the safe band readable.
   function buildParameterScaleDomain(definition, currentValue) {
     if (Number.isFinite(definition.domainMin) && Number.isFinite(definition.domainMax)) {
       return { min: definition.domainMin, max: Math.max(definition.domainMax, currentValue ?? definition.domainMax) };
@@ -1489,37 +1587,6 @@
     return Math.min(Math.max(value, min), max);
   }
 
-  function buildSharedChartScales(yTickFormatter) {
-    return {
-      x: {
-        offset: false,
-        grid: { display: false },
-        ticks: {
-          color: "#5a6968",
-          font: { size: 11, weight: "700" },
-        },
-        border: { display: false },
-      },
-      y: {
-        beginAtZero: false,
-        afterFit(scale) {
-          scale.width = CHART_Y_AXIS_WIDTH;
-        },
-        ticks: {
-          color: "#5a6968",
-          font: { size: 11 },
-          callback(value) {
-            return yTickFormatter(Number(value));
-          },
-        },
-        grid: {
-          color: "rgba(22, 32, 32, 0.09)",
-          borderDash: [4, 6],
-        },
-        border: { display: false },
-      },
-    };
-  }
 
   function buildScreeningResult(useCase, fitCore, fitExtended, coreReasons, extendedReasons, checkedValues) {
     return {
@@ -1532,6 +1599,7 @@
     };
   }
 
+  // Screening logic for drinking-water style suitability.
   function fitForHumanConsumption({
     pH = null,
     turbidity_ntu = null,
@@ -1582,6 +1650,7 @@
     return buildScreeningResult("human_consumption", coreReasons.length === 0, coreReasons.length === 0 && extendedReasons.length === 0, coreReasons, extendedReasons, checked);
   }
 
+  // Screening logic for irrigation/agriculture suitability.
   function fitForAgriculture({
     pH = null,
     ec_us_cm = null,
@@ -1614,6 +1683,7 @@
     return buildScreeningResult("agriculture", coreReasons.length === 0, coreReasons.length === 0 && extendedReasons.length === 0, coreReasons, extendedReasons, checked);
   }
 
+  // Screening logic for aquatic ecosystem health.
   function fitForAquaticLife({
     pH = null,
     dissolved_oxygen_mg_l = null,
@@ -1641,6 +1711,7 @@
     return buildScreeningResult("aquatic_life", coreReasons.length === 0, coreReasons.length === 0 && extendedReasons.length === 0, coreReasons, extendedReasons, checked);
   }
 
+  // Screening logic for recreational/bathing suitability.
   function fitForBathing({
     pH = null,
     dissolved_oxygen_mg_l = null,
@@ -1659,9 +1730,9 @@
     if (bod_mg_l != null && bod_mg_l > 3.0) coreReasons.push(`BOD ${bod_mg_l} mg/L exceeds 3.0 mg/L`);
 
     if (fecal_coliform_mpn_100ml != null) {
-      if (fecal_coliform_mpn_100ml > 500) coreReasons.push(`Fecal coliform ${fecal_coliform_mpn_100ml} MPN/100mL exceeds 500`);
-    } else if (total_coliform_mpn_100ml != null && total_coliform_mpn_100ml > 500) {
-      coreReasons.push(`Total coliform ${total_coliform_mpn_100ml} MPN/100mL exceeds 500`);
+      if (fecal_coliform_mpn_100ml > 0) coreReasons.push(`Fecal coliform ${fecal_coliform_mpn_100ml} MPN/100mL should be 0`);
+    } else if (total_coliform_mpn_100ml != null && total_coliform_mpn_100ml > 0) {
+      coreReasons.push(`Total coliform ${total_coliform_mpn_100ml} MPN/100mL should be 0`);
     }
 
     if (turbidity_ntu != null && turbidity_ntu > 10) extendedReasons.push(`Turbidity ${turbidity_ntu} NTU is high for safe/pleasant bathing`);
@@ -1670,29 +1741,40 @@
     return buildScreeningResult("bathing", coreReasons.length === 0, coreReasons.length === 0 && extendedReasons.length === 0, coreReasons, extendedReasons, checked);
   }
 
+  // Parameter buttons react to both location changes and period/year availability.
   function renderParameterTabs(parameters) {
+    parameters = Array.from(new Set(dashboardData.records.filter(record => record.parameter && (record.rawValue || Number.isFinite(record.numericValue))).map(record => getParameterFamily(record.parameter)))).sort((a, b) => a.localeCompare(b));
     els.parameterTabs.innerHTML = "";
     const availableParameters = new Set(getAvailableParameters());
 
     parameters.forEach((parameter) => {
       const isAvailable = availableParameters.has(parameter);
+      const description = getParameterDescription(parameter);
       const button = document.createElement("button");
       button.type = "button";
       button.className = `tab-button${parameter === state.selectedParameter ? " is-active" : ""}`;
       button.textContent = parameter;
-      button.disabled = !isAvailable;
+      button.title = isAvailable ? parameter : `${parameter}: select to view a station with measurements`;
+      button.setAttribute("aria-label", `${parameter}: ${description}`);
+      button.dataset.parameterDescription = description;
+      button.addEventListener("mouseenter", () => showParameterDescription(button));
+      button.addEventListener("mousemove", () => positionParameterDescription(button));
+      button.addEventListener("mouseleave", hideParameterDescription);
+      button.addEventListener("focus", () => showParameterDescription(button));
+      button.addEventListener("blur", hideParameterDescription);
       button.addEventListener("click", () => {
         if (!isAvailable) {
+          const station = Array.from(groupedRecords.keys()).find(name => getAvailableParameters(name).includes(parameter));
+          if (station) {
+            state.selectedParameter = parameter;
+            selectLocation(station, {openPopup: false});
+          }
           return;
         }
         state.selectedParameter = parameter;
+        syncSelectedYearForParameter();
         syncPeriodSelection();
-        refreshStreamVisualization();
-        renderParameterTabs(parameters);
-        renderPeriodFilter();
-        refreshTrendChart();
-        refreshParameterScale();
-        updateMapLabels();
+        refreshViewsForParameterChange(parameters);
       });
       els.parameterTabs.appendChild(button);
     });
@@ -1701,6 +1783,62 @@
     els.parameterUnit.textContent = activeRecord?.unit || "No unit";
   }
 
+  function getParameterDescription(parameter) {
+    return PARAMETER_DESCRIPTIONS[getParameterFamily(parameter)] || "Water-quality parameter measured for the selected sampling point.";
+  }
+
+  function getParameterDescriptionTooltip() {
+    let tooltip = document.getElementById("parameter-description-tooltip");
+    if (!tooltip) {
+      tooltip = document.createElement("div");
+      tooltip.id = "parameter-description-tooltip";
+      tooltip.className = "parameter-description-tooltip is-hidden";
+      tooltip.setAttribute("role", "tooltip");
+      document.body.appendChild(tooltip);
+    }
+    return tooltip;
+  }
+
+  function showParameterDescription(button) {
+    const description = button.dataset.parameterDescription;
+    if (!description) {
+      return;
+    }
+
+    const tooltip = getParameterDescriptionTooltip();
+    tooltip.textContent = description;
+    tooltip.classList.remove("is-hidden");
+    positionParameterDescription(button);
+  }
+
+  function positionParameterDescription(button) {
+    const tooltip = document.getElementById("parameter-description-tooltip");
+    if (!tooltip || tooltip.classList.contains("is-hidden")) {
+      return;
+    }
+
+    const buttonRect = button.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const viewportPadding = 12;
+    const top = buttonRect.bottom + 8;
+    const centeredLeft = buttonRect.left + (buttonRect.width / 2) - (tooltipRect.width / 2);
+    const left = Math.min(
+      window.innerWidth - tooltipRect.width - viewportPadding,
+      Math.max(viewportPadding, centeredLeft)
+    );
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${Math.min(top, window.innerHeight - tooltipRect.height - viewportPadding)}px`;
+  }
+
+  function hideParameterDescription() {
+    const tooltip = document.getElementById("parameter-description-tooltip");
+    if (tooltip) {
+      tooltip.classList.add("is-hidden");
+    }
+  }
+
+  // If the current month/annual selection no longer has data, move to the next valid option.
   function syncPeriodSelection() {
     const records = filterRecordsBySelectedYear(getParameterRecords());
     const availableMonthIndexes = new Set(records.map((record) => record.monthIndex).filter((monthIndex) => monthIndex > 0));
@@ -1719,6 +1857,16 @@
     state.selectedPeriod = hasAnnual ? "annual" : (MONTH_OPTIONS.find((month) => availableMonthIndexes.has(month.monthIndex))?.key || "annual");
   }
 
+  function syncSelectedYearForParameter() {
+    const availableYears = getAvailableYearsForParameter();
+    if (state.selectedYear === "all" || availableYears.includes(state.selectedYear)) {
+      return;
+    }
+
+    state.selectedYear = "all";
+  }
+
+  // Draw the annual/month filter buttons and refresh dependent panels when one is chosen.
   function renderPeriodFilter() {
     syncYearSelection();
 
@@ -1735,22 +1883,13 @@
     els.periodFilter.innerHTML = "";
     const annualButton = document.createElement("button");
     annualButton.type = "button";
-    annualButton.className = `period-button${state.selectedPeriod === "annual" ? " is-active" : ""}`;
+    annualButton.className = `period-button annual-button${state.selectedPeriod === "annual" ? " is-active" : ""}`;
     annualButton.textContent = "Annual";
     annualButton.disabled = !hasAnnual;
     annualButton.addEventListener("click", () => {
       state.selectedPeriod = "annual";
-      const parameters = getAvailableParameters();
-      if (!parameters.includes(state.selectedParameter)) {
-        state.selectedParameter = parameters[0] ?? null;
-      }
-      renderParameterTabs(getLocationParameters());
-      renderPeriodFilter();
-      refreshTrendChart();
-      refreshSuitabilitySummary();
-      refreshParameterScale();
-      refreshMarkerStyles(false);
-      updateMapLabels();
+      syncSelectedParameterAvailability();
+      refreshViewsForTimeFilterChange();
     });
     els.periodFilter.appendChild(annualButton);
 
@@ -1766,17 +1905,8 @@
           return;
         }
         state.selectedPeriod = month.key;
-        const parameters = getAvailableParameters();
-        if (!parameters.includes(state.selectedParameter)) {
-          state.selectedParameter = parameters[0] ?? null;
-        }
-        renderParameterTabs(getLocationParameters());
-        renderPeriodFilter();
-        refreshTrendChart();
-        refreshSuitabilitySummary();
-        refreshParameterScale();
-        refreshMarkerStyles(false);
-        updateMapLabels();
+        syncSelectedParameterAvailability();
+        refreshViewsForTimeFilterChange();
       });
       els.periodFilter.appendChild(button);
     });
@@ -1794,6 +1924,7 @@
     )).sort((a, b) => a - b);
   }
 
+  // Guards against stale state when switching to a location that lacks the current year.
   function syncYearSelection() {
     const availableYears = getAvailableYears();
     if (state.selectedYear === "all" || availableYears.includes(state.selectedYear)) {
@@ -1803,6 +1934,7 @@
     state.selectedYear = "all";
   }
 
+  // Draw the "All" button plus one button per sampled year.
   function renderYearFilter() {
     if (!els.yearFilter) {
       return;
@@ -1819,13 +1951,7 @@
     allButton.disabled = !availableYears.length;
     allButton.addEventListener("click", () => {
       state.selectedYear = "all";
-      renderPeriodFilter();
-      refreshTrendChart();
-      refreshWeatherChart();
-      refreshSuitabilitySummary();
-      refreshParameterScale();
-      refreshMarkerStyles(false);
-      updateMapLabels();
+      refreshViewsForTimeFilterChange({ includeWeather: true });
     });
     els.yearFilter.appendChild(allButton);
 
@@ -1836,119 +1962,27 @@
       button.textContent = String(year);
       button.addEventListener("click", () => {
         state.selectedYear = year;
-        renderPeriodFilter();
-        refreshTrendChart();
-        refreshWeatherChart();
-        refreshSuitabilitySummary();
-        refreshParameterScale();
-        refreshMarkerStyles(false);
-        updateMapLabels();
+        refreshViewsForTimeFilterChange({ includeWeather: true });
       });
       els.yearFilter.appendChild(button);
     });
   }
 
+  // Create the main water-quality line chart for the selected parameter.
   function renderTrendChart(records) {
-    if (!records.length) {
-      renderEmptyChart("No trend data available.");
-      return;
-    }
-
-    const chartRecords = records.filter((record) => Number.isFinite(record.numericValue));
-    if (!chartRecords.length) {
-      renderEmptyChart("Values exist, but they are not numeric enough to plot.");
-      return;
-    }
-    const selectedKey = state.selectedTimelineKey ?? chartRecords[chartRecords.length - 1].timelineKey;
-    const selectedPoint = chartRecords.find((point) => point.timelineKey === selectedKey) || chartRecords[chartRecords.length - 1];
-    const pointRadii = chartRecords.map((point) => (point.timelineKey === selectedPoint.timelineKey ? 7 : 5));
-    const pointColors = chartRecords.map((point) => (point.timelineKey === selectedPoint.timelineKey ? "#d97706" : "#0f766e"));
-
-    if (trendChartInstance) {
-      trendChartInstance.destroy();
-    }
-
-    els.trendEmpty.textContent = "";
-    els.trendEmpty.classList.add("is-hidden");
-    els.trendChart.style.visibility = "visible";
-
-    const context = els.trendChart.getContext("2d");
-    trendChartInstance = new window.Chart(context, {
-      type: "line",
-      data: {
-        labels: chartRecords.map((record) => shortLabel(record.timelineLabel || record.dateLabel)),
-        datasets: [
-          {
-            data: chartRecords.map((record) => record.numericValue),
-            borderColor: "#0f766e",
-            backgroundColor: "rgba(15, 118, 110, 0.14)",
-            borderWidth: 4,
-            fill: true,
-            tension: 0.32,
-            pointRadius: pointRadii,
-            pointHoverRadius: pointRadii.map((radius) => radius + 2),
-            pointHitRadius: 18,
-            pointBackgroundColor: pointColors,
-            pointBorderColor: "#ffffff",
-            pointBorderWidth: 3,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        interaction: {
-          mode: "nearest",
-          intersect: true,
-        },
-        onClick(_event, elements) {
-          const pointIndex = elements[0]?.index;
-          if (pointIndex == null) {
-            return;
-          }
-
-          state.selectedTimelineKey = chartRecords[pointIndex].timelineKey;
-          renderTrendChart(records);
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: "rgba(22, 32, 32, 0.92)",
-            titleColor: "#f7fffe",
-            bodyColor: "#f7fffe",
-            displayColors: false,
-            callbacks: {
-              title(items) {
-                const index = items[0]?.dataIndex ?? 0;
-                return chartRecords[index].timelineLabel || chartRecords[index].dateLabel;
-              },
-              label(item) {
-                return formatValue(chartRecords[item.dataIndex]);
-              },
-            },
-          },
-        },
-        scales: buildSharedChartScales((value) => formatRainfall(value, true)),
-      },
-    });
-
-    els.valueSummary.textContent = `${formatValue(selectedPoint)} on ${selectedPoint.timelineLabel || selectedPoint.dateLabel}`;
+    const point = records.find(record => record.timelineKey === state.selectedTimelineKey) || records[records.length - 1];
+    els.valueSummary.textContent = point ? `${formatValue(point)} on ${point.timelineLabel || point.dateLabel}` : "No numeric trend";
+    renderLibraryFigure("trend", els.trendChart, els.trendEmpty);
     refreshParameterScale();
   }
 
   function renderEmptyChart(message) {
-    if (trendChartInstance) {
-      trendChartInstance.destroy();
-      trendChartInstance = null;
-    }
-    els.trendChart.style.visibility = "hidden";
-    els.trendEmpty.textContent = message;
-    els.trendEmpty.classList.remove("is-hidden");
+    clearLibraryFigure("trend", els.trendChart, els.trendEmpty, message);
     els.valueSummary.textContent = "No numeric trend";
     refreshParameterScale();
   }
 
+  // Recolor map markers whenever suitability or selection state changes.
   function refreshMarkerStyles(openActivePopup = true) {
     markers.forEach((marker, locationName) => {
       const isActive = locationName === state.selectedLocation;
@@ -1970,6 +2004,7 @@
     }
   }
 
+  // Permanent marker labels show the station name plus the latest visible value.
   function updateMapLabels() {
     const selectedParameter = state.selectedParameter;
 
@@ -1981,7 +2016,7 @@
       if (!latestRecord) {
         marker.unbindTooltip();
         marker.bindTooltip(`<span class="point-value-name">${escapeHtml(labelName)}</span>`, {
-          permanent: true,
+          permanent: markers.size <= 12 || locationName === state.selectedLocation,
           direction: "top",
           offset: [0, -14],
           className: "point-value-tooltip",
@@ -1990,16 +2025,20 @@
         return;
       }
 
-      const labelValue = Number.isFinite(latestRecord.numericValue)
+      let labelValue = Number.isFinite(latestRecord.numericValue)
         ? formatCompactNumber(latestRecord.numericValue)
         : latestRecord.rawValue || "NA";
 
+      const endpoints = periodRecords.filter(record => record.date === latestRecord.date && getParameterVariant(record.parameter));
+      const low = endpoints.find(record => getParameterVariant(record.parameter).toLowerCase() === "min");
+      const high = endpoints.find(record => getParameterVariant(record.parameter).toLowerCase() === "max");
+      if (low && high) labelValue = `${formatCompactNumber(low.numericValue)} - ${formatCompactNumber(high.numericValue)}`;
       marker.unbindTooltip();
       marker.bindTooltip([
         `<span class="point-value-name">${escapeHtml(labelName)}</span>`,
         `<span class="point-value-text">${escapeHtml(labelValue)}</span>`,
       ].join(""), {
-        permanent: true,
+        permanent: markers.size <= 12 || locationName === state.selectedLocation,
         direction: "top",
         offset: [0, -14],
         className: "point-value-tooltip",
@@ -2046,6 +2085,7 @@
     return records.filter((record) => record.year === year);
   }
 
+  // Desktop-only drag support for the floating period panel.
   function initializePeriodPanelDrag() {
     if (!els.periodPanel) {
       return;
@@ -2097,6 +2137,7 @@
     });
   }
 
+  // Reduce many rows within a year down to one representative yearly record.
   function buildYearlySeries(records) {
     const byYear = new Map();
 
@@ -2113,6 +2154,7 @@
       .map(([year, yearRecords]) => {
         const annualRecords = yearRecords.filter((record) => !record.monthIndex);
         const monthlyRecords = yearRecords.filter((record) => record.monthIndex);
+        // Prefer explicit annual rows; otherwise average the available monthly rows.
         const preferred = annualRecords.length ? annualRecords : monthlyRecords;
         const numericRecords = preferred.filter((record) => Number.isFinite(record.numericValue));
         const averageValue = numericRecords.length
@@ -2139,6 +2181,7 @@
     return /stp|sewage treatment plant|diggian|3brd|chilla/i.test(String(locationName));
   }
 
+  // Shared value formatter for popups, tooltips, summaries, and labels.
   function formatValue(record) {
     if (!record) {
       return "No value";
@@ -2184,6 +2227,269 @@
       .replace("e-", "E-");
   }
 
+  // Interpolation rasters are loaded once and reused as the selected parameter changes.
+  // The library computes kriging on the first request and caches it per dataset.
+  async function loadInterpolationData() {
+    // Empty datasets do not need interpolation.
+    if (dashboardData.records.length === 0) {
+      return null;
+    }
+
+    if (interpolationData) {
+      // Reuse the parsed payload if we already fetched it earlier in this session.
+      return interpolationData;
+    }
+
+    if (!interpolationRequest) {
+      // Keep one shared in-flight request so multiple UI refreshes do not fetch the same
+      // dataset-specific interpolation again before the first request finishes.
+      interpolationRequest = fetch(`/api/interpolation?id=${encodeURIComponent(dashboardData.datasetId || "")}`, { cache: "no-store" })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Interpolation data request failed with status ${response.status}`);
+          }
+
+          return response.json();
+        })
+        .then((payload) => {
+          // Store the parsed interpolation payload for future parameter/year switches.
+          interpolationData = payload;
+          return payload;
+        })
+        .catch((error) => {
+          // If loading fails, keep the dashboard usable and just skip the overlay.
+          console.warn("Interpolation overlay could not be loaded.", error);
+          interpolationData = null;
+          interpolationRequest = null;
+          document.getElementById("map-interpolation-status").textContent = "Interpolation could not load. Switch the interpolation toggle to retry.";
+          return null;
+        });
+    }
+
+    return interpolationRequest;
+  }
+
+  // Pick the raster surface that best matches the current parameter/year selection.
+  // Each library surface represents one parameter for either:
+  // 1. a specific year, or
+  // 2. the all-years aggregate fallback.
+  function getInterpolationSurface() {
+    if (!interpolationData || !state.selectedParameter) {
+      return null;
+    }
+
+    // Normalize the selected parameter name so frontend labels match backend surface names.
+    const parameterFamily = getCanonicalInterpolationParameter(getParameterFamily(state.selectedParameter));
+    const targetYear = getInterpolationTargetYear();
+    const matchSurface = (surfaces) => surfaces.find((surface) =>
+      getCanonicalInterpolationParameter(getParameterFamily(surface.parameterFamily || surface.parameter)) === parameterFamily
+    ) || null;
+
+    if (targetYear != null) {
+      // Prefer a year-specific surface when the UI is focused on one year.
+      const yearlyMatch = matchSurface((interpolationData?.surfaces?.yearly || []).filter((surface) => surface.year === targetYear));
+      if (yearlyMatch) {
+        return yearlyMatch;
+      }
+    }
+
+    // Fall back to the all-years surface if no yearly match exists.
+    return matchSurface(interpolationData?.surfaces?.allYears || []);
+  }
+
+  function getInterpolationEstimateAt(latlng) {
+    const surface = getInterpolationSurface();
+    const grid = surface?.grid;
+    const extent = grid?.extent;
+    if (!grid?.values?.length || !extent || !grid.rows || !grid.columns) return null;
+    if (
+      latlng.lat < extent.minLatitude || latlng.lat > extent.maxLatitude ||
+      latlng.lng < extent.minLongitude || latlng.lng > extent.maxLongitude
+    ) return null;
+
+    const latitudeSpan = extent.maxLatitude - extent.minLatitude;
+    const longitudeSpan = extent.maxLongitude - extent.minLongitude;
+    const row = Math.max(0, Math.min(grid.rows - 1,
+      Math.round(((extent.maxLatitude - latlng.lat) / (latitudeSpan || 1)) * (grid.rows - 1))));
+    const column = Math.max(0, Math.min(grid.columns - 1,
+      Math.round(((latlng.lng - extent.minLongitude) / (longitudeSpan || 1)) * (grid.columns - 1))));
+    const value = grid.values[(row * grid.columns) + column];
+    return Number.isFinite(value) ? { value, surface, row, column } : null;
+  }
+
+  function getInterpolationTargetYear() {
+    if (state.selectedYear !== "all") {
+      // If the user explicitly picked a year, use that year’s kriging surface.
+      return state.selectedYear;
+    }
+
+    if (state.selectedPeriod === "annual") {
+      // In annual mode with "all years" selected, use the currently highlighted trend point's
+      // year when possible so the interpolation overlay stays in sync with the selected sample.
+      const selectedRecord = getSelectedParameterScaleRecord();
+      if (selectedRecord && Number.isFinite(selectedRecord.year) && selectedRecord.year > 0) {
+        return selectedRecord.year;
+      }
+    }
+
+    return null;
+  }
+
+  function getCanonicalInterpolationParameter(parameter) {
+    const family = String(parameter || "").trim();
+
+    // Normalize coliform naming so backend-generated surface names and frontend parameter
+    // labels resolve to the same interpolation surface.
+    if (/^t[.\s-]*coliform$/i.test(family) || /^total coliform$/i.test(family)) {
+      return "Total Coliform";
+    }
+
+    if (/^faecal coliform$/i.test(family) || /^fecal coliform$/i.test(family)) {
+      return "Faecal Coliform";
+    }
+
+    return family;
+  }
+
+  // Remove any old overlay and draw the current interpolation image on the map.
+  // The backend provides a numeric grid; this function turns that grid into a temporary
+  // image and stretches it over the interpolation extent on the Leaflet map.
+  function refreshInterpolationOverlay() {
+    if (interpolationOverlay) {
+      map.removeLayer(interpolationOverlay);
+      interpolationOverlay = null;
+    }
+
+    const status = document.getElementById("map-interpolation-status");
+    const legend = document.getElementById("map-interpolation-legend");
+    legend.hidden = true;
+    if (!interpolationEnabled) {
+      status.textContent = "Interpolation hidden.";
+      return;
+    }
+    const surface = getInterpolationSurface();
+    if (!surface?.grid?.values?.length) {
+      status.textContent = !dashboardData.records.length ? "Import a CSV to view interpolation." : !interpolationData ? "Loading interpolation..." : "No interpolation for this parameter and year.";
+      return;
+    }
+
+    const imageUrl = buildInterpolationImage(surface);
+    if (!imageUrl) {
+      status.textContent = "No numeric interpolation values available.";
+      return;
+    }
+
+    const bounds = [
+      [surface.grid.extent.minLatitude, surface.grid.extent.minLongitude],
+      [surface.grid.extent.maxLatitude, surface.grid.extent.maxLongitude],
+    ];
+
+    const values = surface.grid.values.filter(Number.isFinite);
+    const minimum = Math.min(...values);
+    const maximum = Math.max(...values);
+    legend.hidden = false;
+    legend.textContent = `${formatCompactNumber(minimum)} \u2013 ${formatCompactNumber(maximum)} ${surface.unit || ""}`;
+    status.textContent = `${surface.parameter} \u00b7 ${surface.year ?? "All years"}. ${surface.method}. Click the coloured area for an estimate.`;
+
+    // Leaflet places the generated PNG over the geographic bounds of the kriging grid.
+    interpolationOverlay = L.imageOverlay(imageUrl, bounds, {
+      opacity: 0.88,
+      pane: "interpolationPane",
+      interactive: false,
+    }).addTo(map);
+  }
+
+  // Convert numeric grid data into a semi-transparent PNG using an in-memory canvas.
+  // Browser maps cannot directly render a raw 2D array of numbers, so we paint each grid
+  // value into one pixel of an off-screen canvas and then export that canvas as an image.
+  function buildInterpolationImage(surface) {
+    const grid = surface.grid;
+    const validValues = grid.values.filter((value) => Number.isFinite(value));
+    if (!validValues.length || !grid.columns || !grid.rows) {
+      return null;
+    }
+
+    // Compute the numeric range present in this surface so values can be normalized.
+    const min = Math.min(...validValues);
+    const max = Math.max(...validValues);
+    const span = max - min || 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = grid.columns;
+    canvas.height = grid.rows;
+    const context = canvas.getContext("2d");
+    context.imageSmoothingEnabled = true;
+    const imageData = context.createImageData(grid.columns, grid.rows);
+
+    grid.values.forEach((value, index) => {
+      const pixelOffset = index * 4;
+      if (!Number.isFinite(value)) {
+        // Transparent pixel for masked or unavailable cells.
+        imageData.data[pixelOffset + 3] = 0;
+        return;
+      }
+
+      // Normalize each grid value first, then map it into a color ramp.
+      const normalized = getInterpolationNormalizedValue(value, min, max, span);
+      const color = getInterpolationColor(normalized);
+      imageData.data[pixelOffset] = color[0];
+      imageData.data[pixelOffset + 1] = color[1];
+      imageData.data[pixelOffset + 2] = color[2];
+      imageData.data[pixelOffset + 3] = 210;
+    });
+
+    context.putImageData(imageData, 0, 0);
+    return canvas.toDataURL("image/png");
+  }
+
+  // Uses log scaling for very wide positive ranges so extreme outliers do not flatten the map.
+  // Without this, a few very large values could force almost the entire surface into the
+  // same low-color band, making the overlay visually uninformative.
+  function getInterpolationNormalizedValue(value, min, max, span) {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+
+    const isPositiveRange = min > 0 && max > 0;
+    const dynamicRange = isPositiveRange ? (max / min) : 0;
+    if (isPositiveRange && dynamicRange >= 100) {
+      const logMin = Math.log10(min);
+      const logMax = Math.log10(max);
+      const logSpan = logMax - logMin || 1;
+      return clamp((Math.log10(value) - logMin) / logSpan, 0, 1);
+    }
+
+    return clamp((value - min) / span, 0, 1);
+  }
+
+  // Blue -> cyan -> green -> yellow -> red gradient for the interpolation surface.
+  // Lower interpolated values appear cooler, while higher values move into warmer colors.
+  function getInterpolationColor(normalized) {
+    const stops = [
+      { at: 0, color: [29, 78, 216, 88] },
+      { at: 0.18, color: [8, 145, 178, 112] },
+      { at: 0.42, color: [5, 150, 105, 138] },
+      { at: 0.68, color: [234, 179, 8, 164] },
+      { at: 1, color: [220, 38, 38, 188] },
+    ];
+
+    for (let index = 1; index < stops.length; index += 1) {
+      const left = stops[index - 1];
+      const right = stops[index];
+      if (normalized <= right.at) {
+        // Interpolate smoothly between the surrounding color stops.
+        const amount = (normalized - left.at) / (right.at - left.at || 1);
+        return [
+          Math.round(left.color[0] + ((right.color[0] - left.color[0]) * amount)),
+          Math.round(left.color[1] + ((right.color[1] - left.color[1]) * amount)),
+          Math.round(left.color[2] + ((right.color[2] - left.color[2]) * amount)),
+          Math.round(left.color[3] + ((right.color[3] - left.color[3]) * amount)),
+        ];
+      }
+    }
+
+    return stops[stops.length - 1].color;
+  }
+
   function shortLabel(label) {
     const parts = String(label).split(" ");
     if (parts.length >= 2) {
@@ -2195,12 +2501,14 @@
     return String(label);
   }
 
+  // Parameter family strips suffixes like "(max)" and "(min)" so variants group together.
   function getParameterFamily(parameter) {
     const clean = fixTextValue(parameter);
     const variant = getParameterVariant(clean);
     return variant ? clean.replace(/\s*\([^)]*\)\s*$/, "").trim() : clean;
   }
 
+  // Extracts max/min variant tags when present.
   function getParameterVariant(parameter) {
     const match = fixTextValue(parameter).match(/\(([^)]*)\)\s*$/);
     if (!match) {
@@ -2229,6 +2537,7 @@
     return String(value || "").trim();
   }
 
+  // Any user/data text inserted into HTML should be escaped to avoid broken markup/XSS.
   function escapeHtml(value) {
     return String(value)
       .replace(/&/g, "&amp;")
@@ -2238,5 +2547,6 @@
       .replace(/'/g, "&#39;");
   }
 
+  // Boot the dashboard by selecting the first mapped location (or first known location).
   selectLocation(defaultLocation?.name || "", { focusMap: false, openPopup: false });
 })();
