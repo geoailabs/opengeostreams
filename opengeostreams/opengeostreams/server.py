@@ -107,7 +107,8 @@ def normalize_uploaded_table(frame):
         if not measurements:
             raise ValueError("No recognized water-quality parameter columns were found.")
         records = []
-        metadata = [column for column in ("Location", "Latitude", "Longitude", "Date", "Year", "Month", "Data Source") if column in frame]
+        from .pipeline import WATER_BODY_COLUMNS
+        metadata = [column for column in ("Location", "Latitude", "Longitude", "Date", "Year", "Month", "Data Source", *WATER_BODY_COLUMNS) if column in frame]
         for _, row in frame.iterrows():
             if pd.isna(row["Location"]) or not str(row["Location"]).strip():
                 continue
@@ -168,7 +169,7 @@ def convert_upload_to_csv(filename: str, payload: bytes, *, include_metadata=Fal
     return (*result, {"sourceColumnCount": len(source_columns), "sourceColumns": source_columns}) if include_metadata else result
 
 
-def process_uploaded_csv(filename: str, payload: bytes, rows: int = 400):
+def process_uploaded_csv(filename: str, payload: bytes, rows: int | str = "all"):
     """Import through the public library without writing dashboard assets."""
     from .dataset import load_csv
     filename, payload, metadata = convert_upload_to_csv(filename, payload, include_metadata=True)
@@ -184,7 +185,14 @@ def process_uploaded_csv(filename: str, payload: bytes, rows: int = 400):
 def dataset_entry(dataset, name: str) -> dict[str, Any]:
     return {"name": name, "dataset": dataset, "figures": OrderedDict(),
             "figure_lock": threading.Lock(), "chart_locks": {kind: threading.Lock() for kind in ("trend", "distribution", "stream", "interpolation")},
-            "interpolation_lock": threading.Lock()}
+            "interpolation_lock": threading.Lock(), "elevation_lock": threading.Lock(),
+            "network_lock": threading.Lock()}
+
+
+def ensure_network(entry):
+    """Match stations to the river/drain network once per imported dataset."""
+    with entry["network_lock"]:
+        return entry["dataset"].channel_network()
 
 
 def ensure_interpolation(entry):
@@ -241,7 +249,15 @@ def build_figure(entry, query):
             elif kind == "distribution":
                 figure = view.plot_distribution(parameter=parameter, grouping=query.get("grouping", "year"))
             else:
-                figure = view.plot_stream(parameter=parameter)
+                channel = query.get("channel", "all")
+                if channel != "all":
+                    ensure_network(entry)
+                    view._channel_network = dataset._channel_network
+                figure = view.plot_stream(
+                    parameter=parameter,
+                    group_by_channel=channel == "grouped",
+                    channel=None if channel in {"all", "grouped"} else channel,
+                )
         if kind != "interpolation" and "ReportedParameter" in view.data:
             has_ranges = view.data["ReportedParameter"].str.contains(r"\((?:Min|Max)\)$", case=False, regex=True).any()
             if has_ranges:
@@ -313,7 +329,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 data["datasetId"] = active
             self.send_content("application/javascript", b"window.NCHOE_DASHBOARD_DATA = " + json_bytes(data) + b";")
             return
-        if route in {"/api/figure", "/api/interpolation"}:
+        if route in {"/api/figure", "/api/interpolation", "/api/elevations", "/api/network"}:
             self.handle_visualization(route)
             return
         if urllib.parse.urlparse(self.path).path == "/datasets":
@@ -335,7 +351,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 raise ValueError("CSV must be between 1 byte and 10 MB.")
             filename, payload = extract_uploaded_csv(self.headers, self.rfile.read(length))
             with self.server.dataset_lock:
-                row_limit = int(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("rows", ["400"])[0])
+                row_limit = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("rows", ["all"])[0]
+                row_limit = "all" if row_limit == "all" else int(row_limit)
                 dataset = process_uploaded_csv(filename, payload, rows=row_limit)
                 data = {"summary": dataset.summary}
                 dataset_id = uuid.uuid4().hex
@@ -390,6 +407,21 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 entry = self.server.datasets.get(query.pop("id", ""))
             if entry is None:
                 self.send_json(HTTPStatus.NOT_FOUND, {"error": "CSV no longer available. Reload the dashboard."})
+                return
+            if route == "/api/elevations":
+                with entry["elevation_lock"]:
+                    if "elevations" not in entry:
+                        frame = entry["dataset"].fetch_elevations()
+                        entry["elevations"] = {"stations": json.loads(frame.to_json(orient="records"))}
+                    result = entry["elevations"]
+                self.send_json(HTTPStatus.OK, result)
+                return
+            if route == "/api/network":
+                try:
+                    result = {"available": True, **ensure_network(entry)}
+                except ValueError as error:
+                    result = {"available": False, "error": str(error), "channels": [], "unassigned": []}
+                self.send_json(HTTPStatus.OK, result)
                 return
             result = ensure_interpolation(entry) if route == "/api/interpolation" else build_figure(entry, query)
             self.send_json(HTTPStatus.OK, result)

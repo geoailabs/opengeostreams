@@ -1,9 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OpenGeoStreams Water Quality Dashboard</title>
+  <script>
+    // Apply the saved theme before first paint. Dark is the default.
+    try {
+      var savedTheme = window.localStorage.getItem('ogs-theme');
+      if (savedTheme === 'light' || savedTheme === 'dark') document.documentElement.dataset.theme = savedTheme;
+    } catch (_error) { /* storage unavailable: keep dark */ }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -13,178 +20,346 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
   >
-  <link rel="stylesheet" href="./styles.css?v=20260913-general-rivers">
+  <link rel="stylesheet" href="./styles.css?v=20260924-merge-labels">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <section class="hero-card hero-card-collapsible" id="hero-card">
-        <div class="hero-summary">
-          <div class="hero-summary-copy">
-            <h1>OpenGeoStreams <span>Water Quality Dashboard</span></h1>
-          </div>
-        </div>
-      </section>
+  <!-- Line icons (drawn inline so no icon library is needed). -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="i-panel-left" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+    <symbol id="i-droplet" viewBox="0 0 24 24"><path d="M12 2.7s-6 6.3-6 11.3a6 6 0 0 0 12 0c0-5-6-11.3-6-11.3z"/></symbol>
+    <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></symbol>
+    <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/><circle cx="12" cy="12" r="2.5"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+    <symbol id="i-mountain" viewBox="0 0 24 24"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></symbol>
+  </svg>
 
-      <section class="panel-section data-import-panel">
-        <div class="section-heading">
-          <h2>Dashboard data</h2>
-          <span id="data-mode" class="badge subtle">No CSV loaded</span>
-        </div>
-        <form id="csv-upload-form" class="csv-upload-form">
-          <label class="csv-file-label" for="csv-file">Import data files</label>
-          <input id="csv-file" name="file" type="file" accept=".csv,.tsv,.txt,.json,.xlsx,.xls" multiple required>
-          <label class="csv-file-label" for="csv-row-limit">Rows to import per file</label>
-          <p class="section-copy">CSV, TSV, delimited TXT, JSON tables, or Excel (first sheet). Non-CSV tables are converted automatically.</p>
-          <input id="csv-row-limit" name="rows" type="number" min="1" step="1" value="400" required>
-          <div class="csv-upload-actions">
-            <button id="csv-upload-button" type="submit" class="about-open-button">Load files</button>
-            <button id="csv-reset-button" type="button" class="csv-reset-button">Clear all data</button>
-          </div>
-        </form>
-        <label class="csv-file-label" for="csv-dataset-select">Active CSV</label>
-        <select id="csv-dataset-select" disabled aria-label="Active CSV">
-          <option value="">No imported CSVs</option>
-        </select>
-        <p id="csv-shape-summary" class="csv-shape-summary" aria-live="polite">0 rows · 0 columns · 0 missing values</p>
-        <div id="interpolation-availability" class="interpolation-availability" aria-live="polite" hidden></div>
-        <p id="csv-upload-status" class="section-copy csv-upload-status" aria-live="polite"></p>
-      </section>
-
-      <section class="panel-section about-panel">
-        <div class="section-heading">
-          <h2>About OpenGeoStreams</h2>
-        </div>
-        <button type="button" id="about-open" class="about-open-button">Open Description</button>
-      </section>
-
-      <section class="panel-section">
-        <div class="section-heading">
-          <h2>Parameters</h2>
-          <span id="parameter-unit" class="badge subtle">Unit</span>
-        </div>
-        <p id="range-note" class="section-copy" hidden></p>
-        <div id="parameter-tabs" class="tab-list" aria-label="Water quality parameters"></div>
-      </section>
-
-    <section id="dashboard-charts" class="dashboard-charts" aria-label="Water quality charts">
-
-      <section class="panel-section chart-card">
-        <div class="section-heading">
-          <h2>Parameter and Precipitation Trend</h2>
-          <span id="value-summary" class="badge subtle">No data</span>
-          <span id="weather-status" class="badge subtle">Precipitation loading</span>
-        </div>
-        <div class="trend-chart-shell">
-          <div id="trend-chart" class="trend-chart" role="img" aria-label="Trend chart"></div>
-          <div id="trend-empty" class="trend-empty is-hidden" aria-live="polite"></div>
-        </div>
-      </section>
-
-      <section class="panel-section boxplot-panel chart-card">
-        <div class="section-heading">
-          <h2>Distribution</h2>
-          <div id="boxplot-grouping" class="boxplot-grouping" aria-label="Boxplot grouping">
-            <button type="button" class="is-active" data-boxplot-grouping="year">Years</button>
-            <button type="button" data-boxplot-grouping="month">Months</button>
-          </div>
-        </div>
-        <div class="boxplot-shell">
-          <div id="boxplot-chart" class="boxplot-chart" role="img" aria-label="Parameter distribution boxplot"></div>
-          <div id="boxplot-empty" class="trend-empty is-hidden" aria-live="polite"></div>
-          <div id="boxplot-tooltip" class="boxplot-tooltip is-hidden" role="tooltip"></div>
-        </div>
-
-      </section>
-
-      <section class="panel-section chart-card">
-        <div class="section-heading">
-          <h2>Stream Visualization</h2>
-          <span id="stream-status" class="badge subtle">Select parameter</span>
-        </div>
-        <div class="chart-scroll"><div id="stream-visualization" class="stream-viz-shell" aria-live="polite"></div></div>
-        <div id="stream-pagination" class="stream-pagination" hidden><button id="stream-prev" type="button">Previous</button><span id="stream-page-label" aria-live="polite"></span><button id="stream-next" type="button">Next</button></div>
-        <div class="stream-colour-key" aria-label="Stream colour legend">
-          <span><i class="stream-value-gradient"></i> Blue: lower &middot; Yellow: middle &middot; Red: higher</span>
-          <span><i class="stream-missing-swatch"></i> Grey: no data</span>
-          <small>Colours compare mean values for the selected parameter, not safety levels.</small>
-        </div>
-      </section>
-
-
-    </section>
-    </aside>
-
-    <main class="map-area">
-      <div class="map-toolbar">
-        <div class="map-toolbar-copy">
-          <p class="eyebrow">Interactive Map</p>
-          <h2>Sampling points across the selected river</h2>
-        <div id="basemap-toggle" class="basemap-toggle" aria-label="Base map switcher">
-          <button type="button" class="basemap-button is-active" data-basemap="osm">OSM</button>
-          <button type="button" class="basemap-button" data-basemap="minimal">Minimal</button>
-          <button type="button" class="basemap-button" data-basemap="satellite">Satellite</button>
-        </div>
-          <section class="suitability-panel" aria-label="Suitability screening">
-            <div class="suitability-panel-heading">
-              <h3>Use-case screening</h3>
-              <div class="suitability-summary-group">
-                <span id="suitability-summary" class="suitability-summary">Checking latest filtered sample across mapped stations.</span>
-                <span id="suitability-detail" class="suitability-detail">Confirmed checks, proxy checks, and missing checks will appear for the selected station.</span>
-              </div>
-            </div>
-            <div id="use-case-tabs" class="use-case-tabs" aria-label="Suitability use cases"></div>
-          </section>
-          <div class="map-interpolation-controls">
-            <label><input id="map-interpolation-toggle" type="checkbox" checked> Interpolation</label>
-            <button type="button" id="view-interpolation">View interpolation</button>
-            <label><input type="checkbox" id="show-stations" checked> Show stations</label>
-            <span id="map-interpolation-legend" hidden></span>
-            <span id="map-interpolation-status" aria-live="polite">Import a CSV to view interpolation.</span>
-          </div>
-        </div>
-
-
-        <div class="toolbar-stats">
-          <div class="stat-card">
-            <span class="stat-value" id="mapped-count">0</span>
-            <span class="stat-label">Mapped locations</span>
-          </div>
-          <section id="parameter-scale" class="parameter-scale-card" aria-label="Selected parameter safety scale"></section>
-        </div>
-
+  <div class="app-shell" id="app-shell">
+    <header class="topbar">
+      <button type="button" class="icon-btn" id="toggle-layers-panel" aria-controls="layers-panel" aria-expanded="true" title="Show or hide the data panel">
+        <svg class="i"><use href="#i-panel-left"/></svg><span class="sr-only">Data panel</span>
+      </button>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><svg class="i"><use href="#i-droplet"/></svg></span>
+        <h1>OpenGeoStreams <span>Water Quality Dashboard</span></h1>
       </div>
+      <span class="topbar-sep" aria-hidden="true"></span>
+      <div class="topbar-chip" title="Active dataset">
+        <svg class="i"><use href="#i-table"/></svg><span id="data-mode">No CSV loaded</span>
+      </div>
+      <button type="button" class="topbar-chip is-button" id="topbar-parameter" title="Choose a parameter">
+        <svg class="i"><use href="#i-flask"/></svg><span id="topbar-parameter-name">No parameter</span><span id="parameter-unit" class="chip-unit">Unit</span>
+      </button>
+      <div class="topbar-chip is-stat" title="Stations with coordinates">
+        <svg class="i"><use href="#i-pin"/></svg><span><b id="mapped-count">0</b> mapped</span>
+      </div>
+      <span class="topbar-spacer"></span>
+      <button type="button" class="icon-btn" id="about-open" title="About OpenGeoStreams">
+        <svg class="i"><use href="#i-info"/></svg><span class="sr-only">About OpenGeoStreams</span>
+      </button>
+      <button type="button" class="icon-btn" id="theme-toggle" title="Switch theme">
+        <svg class="i theme-icon-light"><use href="#i-sun"/></svg>
+        <svg class="i theme-icon-dark"><use href="#i-moon"/></svg>
+        <span class="sr-only">Switch between dark and light theme</span>
+      </button>
+      <button type="button" class="btn btn-secondary btn-analysis" id="toggle-analysis" aria-controls="analysis-drawer" aria-expanded="true">
+        <svg class="i"><use href="#i-chart"/></svg><span>Analysis</span>
+      </button>
+    </header>
 
+    <main class="map-area" id="map-area">
       <div id="map" class="map-canvas" aria-label="Map of water quality stations"></div>
 
-      <section id="period-panel" class="period-panel" aria-label="Month and annual filters">
+      <!-- Floating HUD over the top of the map: use-case screening and the parameter scale. -->
+      <div class="map-toolbar">
+        <section class="suitability-panel floating-card" aria-label="Suitability screening">
+          <div class="suitability-panel-heading">
+            <h3>Use-case screening</h3>
+            <button type="button" class="icon-btn icon-btn-sm collapse-btn" id="toggle-screening" aria-expanded="true" title="Collapse screening">
+              <svg class="i"><use href="#i-chevron"/></svg><span class="sr-only">Collapse screening</span>
+            </button>
+          </div>
+          <div class="suitability-body">
+            <div id="use-case-tabs" class="use-case-tabs segmented" aria-label="Suitability use cases"></div>
+            <div class="legend-items screening-legend" aria-label="Station marker colours">
+              <div><span class="legend-dot legend-dot-safe"></span>Pass</div>
+              <div><span class="legend-dot legend-dot-caution"></span>Caution</div>
+              <div><span class="legend-dot legend-dot-unsafe"></span>Fail</div>
+              <div><span class="legend-dot legend-dot-unknown"></span>Insufficient data</div>
+            </div>
+            <div class="suitability-summary-group">
+              <span id="suitability-summary" class="suitability-summary">Checking latest filtered sample across mapped stations.</span>
+              <span id="suitability-detail" class="suitability-detail">Confirmed checks, proxy checks, and missing checks will appear for the selected station.</span>
+            </div>
+          </div>
+        </section>
+        <section id="parameter-scale" class="parameter-scale-card floating-card" aria-label="Selected parameter safety scale"></section>
+      </div>
+
+      <!-- Map controls: zoom, fit, basemap. -->
+      <div class="map-controls" role="toolbar" aria-label="Map controls">
+        <div class="control-group">
+          <button type="button" class="map-control" id="map-zoom-in" title="Zoom in"><svg class="i"><use href="#i-plus"/></svg><span class="sr-only">Zoom in</span></button>
+          <button type="button" class="map-control" id="map-zoom-out" title="Zoom out"><svg class="i"><use href="#i-minus"/></svg><span class="sr-only">Zoom out</span></button>
+        </div>
+        <div class="control-group">
+          <button type="button" class="map-control" id="map-fit" title="Fit to stations"><svg class="i"><use href="#i-fit"/></svg><span class="sr-only">Fit to stations</span></button>
+          <button type="button" class="map-control" id="map-basemap-button" aria-expanded="false" aria-controls="basemap-popover" title="Basemap"><svg class="i"><use href="#i-layers"/></svg><span class="sr-only">Basemap</span></button>
+        </div>
+        <div class="basemap-popover floating-card" id="basemap-popover" hidden>
+          <p class="popover-title">Basemap</p>
+          <div id="basemap-toggle" class="basemap-toggle" aria-label="Base map switcher">
+            <button type="button" class="basemap-button" data-basemap="osm"><span class="basemap-thumb thumb-osm"></span>OSM</button>
+            <button type="button" class="basemap-button" data-basemap="minimal"><span class="basemap-thumb thumb-minimal"></span>Minimal</button>
+            <button type="button" class="basemap-button" data-basemap="satellite"><span class="basemap-thumb thumb-satellite"></span>Satellite</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom stack: layers/legend card above the timeline. -->
+      <div class="map-bottom">
+      <!-- Layers and legend: station colours and the interpolation surface. -->
+      <section class="legend-card floating-card" id="legend-card" aria-label="Map layers and legend">
+        <div class="legend-head">
+          <h3>Layers</h3>
+          <button type="button" class="icon-btn icon-btn-sm collapse-btn" id="toggle-legend" aria-expanded="true" title="Collapse layers">
+            <svg class="i"><use href="#i-chevron"/></svg><span class="sr-only">Collapse layers</span>
+          </button>
+        </div>
+        <div class="legend-body">
+          <div class="legend-layer">
+            <label class="switch-row"><span>Stations</span><input type="checkbox" id="show-stations" class="switch" checked></label>
+          </div>
+          <div class="legend-layer">
+            <label class="switch-row"><span>Interpolation</span><input type="checkbox" id="map-interpolation-toggle" class="switch" checked></label>
+            <div class="interp-scale">
+              <span class="interp-gradient" aria-hidden="true"></span>
+              <span id="map-interpolation-legend" hidden></span>
+            </div>
+            <p id="map-interpolation-status" aria-live="polite">Import a CSV to view interpolation.</p>
+            <button type="button" id="view-interpolation" class="btn btn-ghost btn-sm">Zoom to surface</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Timeline filters. -->
+      <section id="period-panel" class="period-panel floating-card" aria-label="Month and annual filters">
         <div class="section-heading period-panel-heading">
-          <h2>Timeline</h2>
-          <span>Choose a period and year</span>
+          <svg class="i"><use href="#i-calendar"/></svg>
+          <h2>Period</h2>
         </div>
         <div id="period-filter" class="period-filter" aria-label="Month or annual period"></div>
         <div class="year-filter-shell">
-          <div class="year-filter-heading">
-            <h3>Years</h3>
-          </div>
+          <div class="year-filter-heading"><h3>Year</h3></div>
           <div id="year-filter" class="period-filter"></div>
         </div>
       </section>
-
-      <div class="legend-card">
-        <div><span class="legend-dot legend-dot-safe"></span> Pass</div>
-        <div><span class="legend-dot legend-dot-caution"></span> Caution</div>
-        <div><span class="legend-dot legend-dot-unsafe"></span> Fail</div>
-        <div><span class="legend-dot legend-dot-unknown"></span> Insufficient data</div>
       </div>
+
+      <!-- Shown until a file is imported. -->
+      <div class="empty-state floating-card" id="empty-state" hidden>
+        <span class="empty-icon" aria-hidden="true"><svg class="i"><use href="#i-upload"/></svg></span>
+        <h2>Drop a file to begin</h2>
+        <p>Drag a CSV, TSV, JSON or Excel file onto the map, or add it from the data panel. Required columns: Parameter, Value, Location, Latitude, Longitude, and a Date or Month/Year.</p>
+        <button type="button" class="btn btn-primary" id="empty-add-data"><svg class="i"><use href="#i-plus"/></svg>Add data</button>
+      </div>
+
+      <div class="drop-overlay" id="drop-overlay" hidden>
+        <div class="drop-overlay-card">
+          <svg class="i"><use href="#i-upload"/></svg>
+          <strong>Drop to import</strong>
+          <span>CSV, TSV, TXT, JSON or Excel</span>
+        </div>
+      </div>
+
+      <!-- Left panel: data layers, parameters, stations, elevation. -->
+      <aside class="layers-panel floating-panel" id="layers-panel" aria-label="Data and stations">
+        <div class="panel-scroll">
+          <section class="panel-section data-import-panel">
+            <div class="section-heading">
+              <h2>Data layers</h2>
+              <button type="button" id="add-data-toggle" class="btn btn-ghost btn-sm" aria-expanded="false" aria-controls="import-panel">
+                <svg class="i"><use href="#i-plus"/></svg>Add data
+              </button>
+            </div>
+            <div id="layer-list" class="layer-list"></div>
+            <label class="sr-only" for="csv-dataset-select">Active CSV</label>
+            <select id="csv-dataset-select" class="visually-hidden-select" tabindex="-1" disabled aria-label="Active CSV">
+              <option value="">No imported CSVs</option>
+            </select>
+            <p id="csv-shape-summary" class="csv-shape-summary" aria-live="polite">0 rows · 0 columns · 0 missing values</p>
+            <div id="interpolation-availability" class="interpolation-availability" aria-live="polite" hidden></div>
+
+            <div id="import-panel" class="import-panel" hidden>
+              <form id="csv-upload-form" class="csv-upload-form">
+                <label class="dropzone" for="csv-file">
+                  <svg class="i"><use href="#i-upload"/></svg>
+                  <strong>Choose files</strong>
+                  <span>or drop them anywhere on the map</span>
+                  <small>CSV, TSV, delimited TXT, JSON tables, or Excel (first sheet). Non-CSV tables are converted automatically.</small>
+                  <span id="csv-file-names" class="dropzone-files"></span>
+                </label>
+                <input id="csv-file" class="file-input" name="file" type="file" accept=".csv,.tsv,.txt,.json,.xlsx,.xls" multiple required>
+                <div class="row-options">
+                  <label class="check-row"><input id="csv-all-rows" type="checkbox" checked> Import all rows</label>
+                  <label class="row-limit" for="csv-row-limit"><span>Rows per file</span>
+                    <input id="csv-row-limit" name="rows" type="number" min="1" step="1" value="400" required disabled>
+                  </label>
+                </div>
+                <div class="csv-upload-actions">
+                  <button id="csv-upload-button" type="submit" class="btn btn-primary">Load files</button>
+                </div>
+              </form>
+            </div>
+            <p id="csv-upload-status" class="csv-upload-status" aria-live="polite"></p>
+            <button id="csv-reset-button" type="button" class="btn btn-danger-ghost btn-sm reset-button"><svg class="i"><use href="#i-trash"/></svg>Clear all data</button>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-heading">
+              <h2>Parameters</h2>
+              <span id="parameter-count" class="badge subtle">0</span>
+            </div>
+            <label class="search-field">
+              <svg class="i"><use href="#i-search"/></svg>
+              <input id="parameter-search" type="search" placeholder="Filter parameters" aria-label="Filter parameters" autocomplete="off">
+            </label>
+            <p id="range-note" class="section-copy range-note" hidden></p>
+            <div id="parameter-tabs" class="tab-list" aria-label="Water quality parameters"></div>
+          </section>
+
+          <section class="panel-section">
+            <div class="section-heading">
+              <h2>Stations</h2>
+              <span id="station-count" class="badge subtle">0</span>
+            </div>
+            <label class="search-field">
+              <svg class="i"><use href="#i-search"/></svg>
+              <input id="station-search" type="search" placeholder="Find a station" aria-label="Find a station" autocomplete="off">
+            </label>
+            <div id="station-list" class="station-list"></div>
+          </section>
+
+          <details class="panel-section elevation-section">
+            <summary>
+              <svg class="i"><use href="#i-mountain"/></svg>
+              <h2>Station elevation</h2>
+              <svg class="i summary-chevron"><use href="#i-chevron"/></svg>
+            </summary>
+            <p class="section-copy">Surface elevation from Google Earth Engine for the active file's coordinates. Metres above EGM2008; includes vegetation and buildings.</p>
+            <button type="button" id="fetch-elevations" class="btn btn-secondary btn-sm">Fetch elevations</button>
+            <p id="elevation-status" class="section-copy" aria-live="polite"></p>
+            <div id="elevation-results" class="elevation-results"></div>
+            <details class="source-note"><summary>Elevation source</summary>Copernicus DEM GLO-30 (2024_1). &copy; DLR e.V. 2010-2014 and &copy; Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved. The organisations in charge of the Copernicus programme by law or by delegation do not incur any liability for any use of the Copernicus WorldDEM-30.</details>
+          </details>
+        </div>
+      </aside>
+
+      <!-- Right drawer: charts for the selected station and parameter. -->
+      <aside class="analysis-drawer floating-panel" id="analysis-drawer" aria-label="Analysis">
+        <div class="drawer-resize" id="drawer-resize" role="separator" aria-orientation="vertical" aria-label="Resize analysis panel" tabindex="0"></div>
+        <header class="drawer-header">
+          <div class="drawer-title">
+            <p class="eyebrow">Analysis</p>
+            <h2 id="analysis-context">No station selected</h2>
+            <p id="analysis-subtitle" class="drawer-subtitle"></p>
+          </div>
+          <button type="button" class="icon-btn" id="close-analysis" title="Close analysis">
+            <svg class="i"><use href="#i-x"/></svg><span class="sr-only">Close analysis</span>
+          </button>
+        </header>
+        <nav class="drawer-tabs segmented" aria-label="Chart sections">
+          <button type="button" class="is-active" data-target="trend-section">Trend</button>
+          <button type="button" data-target="distribution-section">Distribution</button>
+          <button type="button" data-target="stream-section">Stream</button>
+        </nav>
+        <div class="analysis-body" id="analysis-body">
+          <section id="dashboard-charts" class="dashboard-charts" aria-label="Water quality charts">
+            <section class="chart-card" id="trend-section">
+              <div class="section-heading chart-heading">
+                <h3>Parameter and precipitation trend</h3>
+                <div class="chart-badges">
+                  <span id="value-summary" class="badge accent">No data</span>
+                  <span id="weather-status" class="badge subtle">Precipitation loading</span>
+                </div>
+              </div>
+              <div class="trend-chart-shell">
+                <div id="trend-chart" class="trend-chart" role="img" aria-label="Trend chart"></div>
+                <div id="trend-empty" class="trend-empty is-hidden" aria-live="polite"></div>
+              </div>
+            </section>
+
+            <section class="chart-card boxplot-panel" id="distribution-section">
+              <div class="section-heading chart-heading">
+                <h3>Distribution</h3>
+                <div id="boxplot-grouping" class="boxplot-grouping segmented segmented-sm" aria-label="Boxplot grouping">
+                  <button type="button" class="is-active" data-boxplot-grouping="year">Years</button>
+                  <button type="button" data-boxplot-grouping="month">Months</button>
+                </div>
+              </div>
+              <div class="boxplot-shell">
+                <div id="boxplot-chart" class="boxplot-chart" role="img" aria-label="Parameter distribution boxplot"></div>
+                <div id="boxplot-empty" class="trend-empty is-hidden" aria-live="polite"></div>
+                <div id="boxplot-tooltip" class="boxplot-tooltip is-hidden" role="tooltip"></div>
+              </div>
+            </section>
+
+            <section class="chart-card" id="stream-section">
+              <div class="section-heading chart-heading">
+                <h3>Stream visualization</h3>
+                <span id="stream-status" class="badge subtle">Select parameter</span>
+              </div>
+              <div class="channel-picker">
+                <label for="stream-channel">Drain / river</label>
+                <div class="channel-select-row">
+                  <button type="button" class="icon-btn channel-step" id="channel-prev" title="Previous drain" disabled><svg class="i"><use href="#i-chevron"/></svg><span class="sr-only">Previous drain</span></button>
+                  <select id="stream-channel" aria-describedby="channel-note">
+                    <option value="all">All stations (A–Z)</option>
+                  </select>
+                  <button type="button" class="icon-btn channel-step" id="channel-next" title="Next drain" disabled><svg class="i"><use href="#i-chevron"/></svg><span class="sr-only">Next drain</span></button>
+                </div>
+                <p id="channel-note" class="channel-note" aria-live="polite">Matching stations to the river network…</p>
+              </div>
+              <div id="channel-summary" class="channel-summary" hidden></div>
+              <div class="chart-scroll"><div id="stream-visualization" class="stream-viz-shell" aria-live="polite"></div></div>
+              <div id="stream-pagination" class="stream-pagination" hidden>
+                <button id="stream-prev" type="button" class="btn btn-secondary btn-sm">Previous</button>
+                <span id="stream-page-label" aria-live="polite"></span>
+                <button id="stream-next" type="button" class="btn btn-secondary btn-sm">Next</button>
+              </div>
+              <div class="stream-colour-key" aria-label="Stream colour legend">
+                <span><i class="stream-value-gradient"></i> Blue: lower &middot; Yellow: middle &middot; Red: higher</span>
+                <span><i class="stream-missing-swatch"></i> Grey: no data</span>
+                <small>Colours compare mean values for the selected parameter, not safety levels.</small>
+              </div>
+            </section>
+          </section>
+        </div>
+      </aside>
     </main>
   </div>
+
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="false"></div>
 
   <dialog id="about-dialog" class="about-dialog">
     <div class="about-dialog-card">
       <div class="section-heading">
         <h2>About OpenGeoStreams</h2>
-        <button type="button" id="about-close" class="about-close-button" aria-label="Close description">Close</button>
+        <button type="button" id="about-close" class="icon-btn" aria-label="Close description"><svg class="i"><use href="#i-x"/></svg></button>
       </div>
       <p class="section-copy">
         OpenGeoStreams enables users to upload water-quality data for any river as a CSV and transform it into interactive maps, temporal trends, distribution summaries, precipitation comparisons, interpolation surfaces, and river-health insights. These visualizations help users explore spatial and seasonal patterns, identify potential water-quality concerns, and better understand the overall health of the river.
@@ -199,7 +374,8 @@
   ></script>
   <script src="/plotly.min.js"></script>
   <script src="./dashboard-data.js?v=20260824-empty-state"></script>
-  <script src="./app.js?v=20260913-general-rivers"></script>
+  <script src="./ui.js?v=20260924-merge-labels"></script>
+  <script src="./app.js?v=20260924-merge-labels"></script>
   <script>
     (function () {
       var data = window.NCHOE_DASHBOARD_DATA || {};
@@ -213,14 +389,65 @@
       var mode = document.getElementById('data-mode');
       var selector = document.getElementById('csv-dataset-select');
       var activeId = '';
+      document.getElementById('fetch-elevations').addEventListener('click', async function () {
+        var button = this, status = document.getElementById('elevation-status');
+        var results = document.getElementById('elevation-results');
+        var requestedId = activeId;
+        results.replaceChildren();
+        if (!requestedId) { status.textContent = 'Import a file first.'; return; }
+        button.disabled = true;
+        status.textContent = 'Fetching elevations...';
+        try {
+          var response = await fetch('/api/elevations?id=' + encodeURIComponent(requestedId));
+          var payload = await response.json();
+          if (requestedId !== activeId) return;
+          if (!response.ok) throw new Error(payload.error || 'Elevation request failed.');
+          window.dispatchEvent(new CustomEvent('station-elevations', {detail: payload.stations}));
+          payload.stations.sort(function (a, b) { return (b.status === 'ok' ? b.elevation_m : -Infinity) - (a.status === 'ok' ? a.elevation_m : -Infinity) || String(a.Location).localeCompare(String(b.Location)); });
+          var table = document.createElement('ol');
+          table.className = 'elevation-list';
+          payload.stations.forEach(function (station, index) {
+            var item = document.createElement('li');
+            var ok = station.status === 'ok';
+            var rank = document.createElement('span');
+            rank.className = 'elevation-rank';
+            rank.textContent = ok ? String(index + 1) : '–';
+            var text = document.createElement('span');
+            text.className = 'elevation-text';
+            var name = document.createElement('span');
+            name.className = 'elevation-name';
+            name.textContent = station.Location;
+            name.title = station.Location;
+            var coords = document.createElement('span');
+            coords.className = 'elevation-coords';
+            coords.textContent = Number(station.Latitude).toFixed(4) + ', ' + Number(station.Longitude).toFixed(4);
+            text.append(name, coords);
+            var value = document.createElement('span');
+            value.className = 'elevation-value' + (ok ? '' : ' is-missing');
+            value.textContent = ok ? station.elevation_m.toFixed(1) + ' m' : station.status.replace(/_/g, ' ');
+            item.append(rank, text, value);
+            table.appendChild(item);
+          });
+          results.appendChild(table);
+          status.textContent = payload.stations.filter(function (s) { return s.status === 'ok'; }).length + ' of ' + payload.stations.length + ' stations have elevations.';
+        } catch (error) { if (requestedId === activeId) status.textContent = error.message; }
+        finally { button.disabled = false; }
+      });
+      document.getElementById('csv-all-rows').addEventListener('change', function () {
+        document.getElementById('csv-row-limit').disabled = this.checked;
+      });
       function setBusy(busy) {
         uploadButton.disabled = busy;
         resetButton.disabled = busy;
         fileInput.disabled = busy;
-        document.getElementById('csv-row-limit').disabled = busy;
+        document.getElementById('csv-all-rows').disabled = busy;
+        document.getElementById('csv-row-limit').disabled = busy || document.getElementById('csv-all-rows').checked;
         selector.disabled = busy || !selector.options.length || !selector.options[0].value;
+        document.body.classList.toggle('is-busy', busy);
       }
       async function refreshDatasets() {
+        document.getElementById('elevation-results').replaceChildren();
+        document.getElementById('elevation-status').textContent = '';
         var response = await fetch('/datasets');
         if (!response.ok) throw new Error('Could not load the CSV list.');
         var result = await response.json();
@@ -278,8 +505,26 @@
         var missingCount = Number.isFinite(summary.missingValueCount) ? summary.missingValueCount : (savedShapeMatches ? savedShape.missing : 0);
         var totalCells = rowCount * columnCount;
         var missingPercent = totalCells ? ((missingCount / totalCells) * 100).toFixed(1) : '0.0';
-        shapeSummary.textContent = rowCount + (Number.isFinite(summary.totalRows) ? ' of ' + summary.totalRows : '') + ' rows · ' + columnCount + ' imported columns · ' + missingCount + ' missing cells (' + missingPercent + '%)';
-        if (Number.isFinite(summary.sourceColumnCount) && summary.sourceColumnCount !== columnCount) shapeSummary.appendChild(document.createTextNode(' | Original file: ' + summary.sourceColumnCount + ' columns; converted table: ' + columnCount + '.'));
+        shapeSummary.replaceChildren();
+        var stats = document.createElement('div');
+        stats.className = 'shape-stats';
+        var sourceColumns = Number.isFinite(summary.sourceColumnCount) && summary.sourceColumnCount !== columnCount ? summary.sourceColumnCount : null;
+        var fmt = function (value) { return Number(value).toLocaleString(); };
+        var partial = Number.isFinite(summary.totalRows) && summary.totalRows !== rowCount;
+        [
+          [fmt(rowCount), partial ? 'of ' + fmt(summary.totalRows) + ' rows' : 'rows (all)'],
+          [String(columnCount), sourceColumns ? 'columns · ' + sourceColumns + ' in file' : 'columns'],
+          [missingPercent + '%', 'missing · ' + fmt(missingCount) + ' cells']
+        ].forEach(function (item) {
+          var cell = document.createElement('span');
+          var value = document.createElement('b');
+          value.textContent = item[0];
+          var label = document.createElement('small');
+          label.textContent = item[1];
+          cell.append(value, label);
+          stats.appendChild(cell);
+        });
+        shapeSummary.appendChild(stats);
         var columns = Object.keys(summary.missingByColumn || {});
         if (columns.length) {
           var columnDetails = document.createElement('details');
@@ -297,6 +542,31 @@
           }
           shapeSummary.appendChild(columnDetails);
         }
+        var merged = summary.mergedLocations || [];
+        if (merged.length) {
+          // Station labels that were variants of the same site (e.g. a PDF fragment with a pasted coordinate).
+          var mergeDetails = document.createElement('details');
+          mergeDetails.className = 'column-details merge-details';
+          var mergeHeading = document.createElement('summary');
+          var mergedCount = merged.reduce(function (total, item) { return total + item.merged.length; }, 0);
+          mergeHeading.textContent = mergedCount + ' duplicate station label' + (mergedCount === 1 ? '' : 's') + ' merged';
+          mergeDetails.appendChild(mergeHeading);
+          var mergeList = document.createElement('ul');
+          merged.forEach(function (item) {
+            var entry = document.createElement('li');
+            var kept = document.createElement('strong');
+            kept.textContent = item.name;
+            entry.appendChild(kept);
+            item.merged.forEach(function (name) {
+              var alias = document.createElement('span');
+              alias.textContent = 'also: ' + name;
+              entry.appendChild(alias);
+            });
+            mergeList.appendChild(entry);
+          });
+          mergeDetails.appendChild(mergeList);
+          shapeSummary.appendChild(mergeDetails);
+        }
       }
       if (interpolationAvailability) {
         var mappedStationCount = Number((data.summary || {}).mappedLocationCount || 0);
@@ -305,11 +575,12 @@
         } else if (mappedStationCount < 1) {
           interpolationAvailability.hidden = false;
           interpolationAvailability.className = 'interpolation-availability is-warning';
-          interpolationAvailability.innerHTML = '<strong>Interpolation unavailable</strong><span>This dataset has no monitoring stations with valid coordinates.</span>';
+          interpolationAvailability.innerHTML = '<strong>Interpolation unavailable</strong><span>No stations have valid coordinates.</span>';
         } else {
           interpolationAvailability.hidden = false;
           interpolationAvailability.className = 'interpolation-availability is-available';
-          interpolationAvailability.innerHTML = '<strong>Interpolation eligible</strong><span>' + mappedStationCount + ' unique mapped station' + (mappedStationCount === 1 ? ' is' : 's are') + ' available. Individual parameters require at least one numeric measurement.</span>';
+          interpolationAvailability.innerHTML = '<strong>Interpolation ready</strong><span>' + mappedStationCount + ' station' + (mappedStationCount === 1 ? '' : 's') + '</span>';
+          interpolationAvailability.title = 'Each parameter needs at least one numeric measurement to draw a surface.';
         }
       }
       if (resetButton) resetButton.hidden = !data.imported;
@@ -326,7 +597,7 @@
           try {
             var body = new FormData();
             body.append('file', files[index]);
-            var response = await fetch('/upload-csv?rows=' + encodeURIComponent(document.getElementById('csv-row-limit').value), { method: 'POST', body: body });
+            var response = await fetch('/upload-csv?rows=' + encodeURIComponent(document.getElementById('csv-all-rows').checked ? 'all' : document.getElementById('csv-row-limit').value), { method: 'POST', body: body });
             var result = await response.json();
             if (!response.ok) throw new Error(result.error || 'CSV upload failed.');
             loaded += 1;

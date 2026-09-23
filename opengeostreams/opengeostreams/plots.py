@@ -251,10 +251,41 @@ def distribution_figure(dataset, parameter=None, grouping="year", location=None)
     return figure
 
 
-def stream_figure(dataset, parameter=None):
-    """Interactive year-by-location heatmap."""
+def _channel_order(dataset, channel=None, group_by_channel=False):
+    """Station order and grouping metadata from the drain/river network."""
+    network = getattr(dataset, "_channel_network", None) or dataset.channel_network()
+    if channel:
+        key = str(channel).casefold()
+        if key == "unassigned":
+            stations = [item["location"] for item in network["unassigned"]]
+            return stations, {"streamChannel": {"id": "unassigned", "name": "Not on a mapped drain/river",
+                                                "stations": stations, "ordered": False}}
+        match = next((item for item in network["channels"]
+                      if item["id"] == key or item["name"].casefold() == key), None)
+        if match is None:
+            raise ValueError(f"Unknown drain/river: {channel}")
+        stations = [item["location"] for item in match["stations"]]
+        return stations, {"streamChannel": {"id": match["id"], "name": match["name"], "stations": stations,
+                                            "ordered": bool(match.get("ordered", True))}}
+    order, groups = [], []
+    for item in network["channels"]:
+        stations = [station["location"] for station in item["stations"]]
+        groups.append({"id": item["id"], "name": item["name"], "start": len(order), "count": len(stations)})
+        order.extend(stations)
+    return order, {"streamGroups": groups}
+
+
+def stream_figure(dataset, parameter=None, *, channel=None, group_by_channel=False):
+    """Interactive year-by-location heatmap.
+
+    ``group_by_channel=True`` groups rows by drain/river (upstream first within each);
+    ``channel="<id or name>"`` shows only that drain/river, ordered upstream -> downstream.
+    """
     go = _go()
     frame, parameter = _select(dataset, parameter)
+    station_order, order_meta = (None, {})
+    if channel or group_by_channel:
+        station_order, order_meta = _channel_order(dataset, channel, group_by_channel)
     if not frame.empty:
         frame["Year"] = frame["Date"].map(lambda value: pipeline.parse_date_bounds(value)[0].year)
         table = frame.pivot_table(index="Location", columns="Year", values="NumericValue", aggfunc="mean")
@@ -262,9 +293,9 @@ def stream_figure(dataset, parameter=None):
             pipeline.parse_date_bounds(value)[0].year
             for value in dataset.data["Date"].dropna()
         })
-        table = table.reindex(index=sorted(dataset.data["Location"].dropna().unique()), columns=all_years)
+        table = table.reindex(index=_stream_index(dataset, station_order, channel), columns=all_years)
     else:
-        table = pd.DataFrame(index=sorted(dataset.data["Location"].dropna().unique()), columns=sorted({pipeline.parse_date_bounds(value)[0].year for value in dataset.data["Date"].dropna()}), dtype=float)
+        table = pd.DataFrame(index=_stream_index(dataset, station_order, channel), columns=sorted({pipeline.parse_date_bounds(value)[0].year for value in dataset.data["Date"].dropna()}), dtype=float)
     values = table.to_numpy(dtype=float) if not table.empty else np.empty((0, 0))
     display_values = np.empty(values.shape, dtype=object)
     cell_labels = np.empty(values.shape, dtype=object)
@@ -307,7 +338,27 @@ def stream_figure(dataset, parameter=None):
     )
     figure.update_xaxes(tickangle=0, tickmode="array", tickvals=list(table.columns))
     figure.update_yaxes(automargin=True)
+    if order_meta:
+        if station_order is not None and not channel:
+            # Everything after the grouped stations is "not on a mapped drain/river".
+            grouped = sum(group["count"] for group in order_meta["streamGroups"])
+            if len(table.index) > grouped:
+                order_meta["streamGroups"].append({"id": "unassigned", "name": "Not on a mapped drain/river",
+                                                   "start": grouped, "count": len(table.index) - grouped})
+        # Rows run top to bottom in this order (upstream first).
+        figure.update_yaxes(autorange="reversed")
+        figure.update_layout(meta={**(figure.layout.meta or {}), **order_meta})
     return figure
+
+
+def _stream_index(dataset, station_order=None, channel=None):
+    locations = sorted(dataset.data["Location"].dropna().unique())
+    if station_order is None:
+        return locations
+    if channel:
+        return list(dict.fromkeys(station_order))
+    ordered = list(dict.fromkeys(item for item in station_order if item in set(locations)))
+    return ordered + [item for item in locations if item not in set(ordered)]
 
 
 def _surface(dataset, parameter=None, year=None):

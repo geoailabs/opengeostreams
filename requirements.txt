@@ -1,5 +1,6 @@
 # Install the library and its declared dashboard dependencies.
 -e ./opengeostreams
 
-# Optional river-mask development utility.
+# Drain/river matching (network.py) and the optional river-mask utility.
 geopandas>=1.1
+pyarrow>=14

@@ -1,5 +1,6 @@
 """OpenGeoStreams regression suite. Browser and PNG tests need optional dependencies."""
 import json
+import os
 import threading
 import unittest
 import urllib.request
@@ -109,6 +110,46 @@ class DashboardLibraryTests(unittest.TestCase):
         with urllib.request.urlopen(req) as response:
             return json.load(response)
 
+    def test_browser_elevation_order(self):
+        from playwright.sync_api import sync_playwright
+        self.upload(rows="all")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(channel='chrome', headless=True)
+            try:
+                page = browser.new_page()
+                errors = []
+                page.on('pageerror', lambda error: errors.append(str(error)))
+                page.goto(self.base)
+                page.wait_for_function("document.getElementById('stream-visualization').data?.length", timeout=90000)
+                page.evaluate("""window.dispatchEvent(new CustomEvent('station-elevations', {detail: [
+                    {Location:'A',Latitude:30.70,Longitude:76.70,elevation_m:100,status:'ok'},
+                    {Location:'B',Latitude:30.71,Longitude:76.71,elevation_m:200,status:'ok'}]}))""")
+                page.wait_for_function("document.getElementById('stream-visualization').layout.yaxis.categoryarray[0] === 'B'")
+                self.assertIn('#1', page.locator('#stream-visualization').evaluate('(el) => el.layout.yaxis.ticktext[0]'))
+                self.assertEqual(page.locator('.elevation-rank-marker').count(), 0)
+                self.assertNotIn('200.0 m', page.locator('.leaflet-tooltip-pane').inner_text())
+                page.evaluate("""window.dispatchEvent(new CustomEvent('station-elevations', {detail: [
+                    {Location:'A',Latitude:30.70,Longitude:76.70,elevation_m:0,status:'ok'}]}))""")
+                page.wait_for_function("document.getElementById('stream-visualization').layout.yaxis.categoryarray[0] === 'A'")
+                self.assertEqual(page.locator('.elevation-rank-marker').count(), 0)
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
+    def test_elevation_endpoint_cache(self):
+        result = self.upload(rows="all")
+        dataset_id = self.get('/datasets')['activeId']
+        dataset = self.httpd.datasets[dataset_id]['dataset']
+        expected = pd.DataFrame([{"Location": "A", "elevation_m": 0, "status": "ok"}])
+        self.httpd.datasets[dataset_id]['interpolation_lock'].acquire()
+        self.addCleanup(self.httpd.datasets[dataset_id]['interpolation_lock'].release)
+        with patch.object(dataset, 'fetch_elevations', return_value=expected) as fetch:
+            with urllib.request.urlopen(self.base + '/api/elevations?id=' + dataset_id, timeout=5) as response:
+                first = json.load(response)
+            self.assertEqual(first['stations'][0]['elevation_m'], 0)
+            self.assertEqual(first, self.get('/api/elevations?id=' + dataset_id))
+            fetch.assert_called_once()
+
     def test_upload_filters_and_cache(self):
         result = self.upload(rows=2)
         self.assertEqual(result['summary']['loadedRows'], 2)
@@ -168,7 +209,7 @@ class DashboardLibraryTests(unittest.TestCase):
                 page.wait_for_timeout(300)
                 point.hover(force=True)
                 page.locator('#trend-tooltip').wait_for(state='visible')
-                page.locator('.sidebar').evaluate('(el) => el.scrollTop += 80')
+                page.locator('#analysis-body').evaluate('(el) => el.scrollTop += 80')
                 page.locator('#trend-tooltip').wait_for(state='hidden')
                 point.scroll_into_view_if_needed()
                 page.wait_for_timeout(300)
@@ -209,6 +250,7 @@ class DashboardLibraryTests(unittest.TestCase):
                 page = browser.new_page(viewport={'width':1440, 'height':1000})
                 page.on('pageerror', lambda error: errors.append(str(error)))
                 page.goto(self.base)
+                page.locator('#csv-all-rows').uncheck()
                 page.locator('#csv-row-limit').fill('2')
                 page.locator('#csv-file').set_input_files([
                     {'name':'first.csv','mimeType':'text/csv','buffer':CSV},
@@ -217,7 +259,7 @@ class DashboardLibraryTests(unittest.TestCase):
                 page.locator('#csv-upload-button').click()
                 page.wait_for_url('**/?data=*')
                 page.wait_for_function("['trend-chart','boxplot-chart','stream-visualization'].every(id => document.getElementById(id)?.data?.length)", timeout=90000)
-                self.assertLessEqual(page.locator('.sidebar').bounding_box()['width'], 390)
+                self.assertLessEqual(page.locator('.layers-panel').bounding_box()['width'], 340)
                 self.assertGreater(page.locator('.map-area').bounding_box()['width'], 950)
                 screening = page.locator('.suitability-panel').bounding_box()
                 map_box = page.locator('#map').bounding_box()
@@ -226,9 +268,9 @@ class DashboardLibraryTests(unittest.TestCase):
                 self.assertLess(page.locator('#parameter-scale').bounding_box()['height'], 130)
                 for chart_id in ('trend-chart', 'boxplot-chart', 'stream-visualization'):
                     box = page.locator('#' + chart_id).bounding_box()
-                    self.assertGreaterEqual(box['width'], 260)
-                    self.assertLessEqual(box['width'], 420)
-                    self.assertTrue(page.locator('#' + chart_id).evaluate('(el) => !!el.closest(".sidebar")'))
+                    self.assertGreaterEqual(box['width'], 380)
+                    self.assertLessEqual(box['width'], 900)
+                    self.assertTrue(page.locator('#' + chart_id).evaluate('(el) => !!el.closest(".analysis-drawer")'))
                     self.assertGreaterEqual(box['height'], 280 if chart_id == 'stream-visualization' else 380)
                 import tempfile
                 from pathlib import Path
@@ -247,7 +289,7 @@ class DashboardLibraryTests(unittest.TestCase):
                 page.locator('#map-interpolation-toggle').check()
                 self.assertEqual(page.locator('#map .leaflet-image-layer').count(), 1)
                 self.assertEqual(page.evaluate("document.getElementById('stream-visualization').data[0].colorbar.orientation"), 'h')
-                self.assertIn('2 of 3 rows', page.locator('#csv-shape-summary').inner_text())
+                self.assertIn('of 3 rows', page.locator('#csv-shape-summary').inner_text())
                 self.assertEqual(page.locator('#csv-dataset-select option').count(), 2)
                 self.assertTrue(page.evaluate("document.getElementById('trend-chart').data.some(trace => trace.type === 'scatter')"))
                 self.assertTrue(page.evaluate("document.getElementById('stream-visualization').data.some(trace => trace.type === 'heatmap')"))
@@ -277,7 +319,7 @@ class DashboardLibraryTests(unittest.TestCase):
                     page.locator('#boxplot-chart .modebar-btn[data-title="Download plot as a PNG"]').click()
                 self.assertTrue(download.value.suggested_filename.endswith('.png'))
                 first = page.locator('#csv-dataset-select option').first.get_attribute('value')
-                page.select_option('#csv-dataset-select', first)
+                page.locator(f'.layer-row[data-id="{first}"]').click()
                 page.wait_for_url('**/?data=*')
                 page.wait_for_function("window.NCHOE_DASHBOARD_DATA?.activeFile === 'first.csv'")
                 page.wait_for_function("document.getElementById('trend-chart')?.data?.length")
@@ -507,3 +549,262 @@ class PngExportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ElevationAndAllRowsTests(unittest.TestCase):
+    def test_all_rows_and_custom_limit(self):
+        payload = b"Parameter,Value,Location,Latitude,Longitude,Year\n" + b"pH,7,A,30,76,2024\n" * 405
+        self.assertEqual(len(process_uploaded_csv("river.csv", payload)), 405)
+        self.assertEqual(len(process_uploaded_csv("river.csv", payload, rows=2)), 2)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "river.csv"
+            path.write_bytes(payload)
+            self.assertEqual(len(ogs.load_csv(path)), 400)
+            self.assertEqual(len(ogs.load_csv(path, rows="all")), 405)
+
+    def test_elevations_deduplicate_validate_and_preserve_zero(self):
+        from unittest.mock import MagicMock
+        from opengeostreams.opengeostreams.elevation import fetch_elevations
+        ee = MagicMock()
+        dem = ee.ImageCollection.return_value.filterBounds.return_value.select.return_value.mosaic.return_value.rename.return_value
+        dem.reduceRegions.return_value.getInfo.return_value = {"features": [
+            {"properties": {"station_id": "0", "elevation_m": 0}},
+            {"properties": {"station_id": "1", "elevation_m": -12}},
+            {"properties": {"station_id": "2"}}]}
+        frame = pd.DataFrame({"Location": ["A", "A", "B", "C", "D", "E"],
+                              "Latitude": [30, 30, 30, 31, 32, 100],
+                              "Longitude": [76, 76, 76, 77, 78, 79]})
+        with patch.dict("sys.modules", {"ee": ee}):
+            result = fetch_elevations(frame, project="test-project")
+        self.assertEqual(len(result), 5)
+        self.assertEqual(result.elevation_m.tolist()[:3], [0, 0, -12])
+        self.assertEqual(result.status.tolist(), ["ok", "ok", "ok", "no_data", "invalid_coordinates"])
+        ee.Geometry.MultiPoint.assert_called_once_with([[76.0, 30.0], [77.0, 31.0], [78.0, 32.0]])
+        ee.ImageCollection.return_value.filterBounds.assert_called_once_with(ee.Geometry.MultiPoint.return_value)
+        self.assertEqual(ee.Geometry.Point.call_count, 3)
+        ee.Geometry.Point.assert_any_call([76.0, 30.0])
+        self.assertEqual(dem.reduceRegions.call_args.kwargs["scale"], 30)
+        ee.Initialize.assert_called_once_with(project="test-project")
+
+    def test_missing_project_explained(self):
+        from opengeostreams.opengeostreams.elevation import fetch_elevations
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaisesRegex(ValueError, "OPENGEOSTREAMS_EE_PROJECT"):
+                fetch_elevations(pd.DataFrame())
+
+
+class ChannelNetworkTests(unittest.TestCase):
+    """Drain/river grouping and upstream ordering with a small synthetic network."""
+
+    def setUp(self):
+        # Never call the elevation service from tests; individual tests patch it.
+        patcher = patch.dict(os.environ, {"OPENGEOSTREAMS_OFFLINE": "1"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_water_body_names_in_station_labels(self):
+        from opengeostreams.opengeostreams.network import parse_water_body, name_similarity
+        cases = {
+            "HUDIARA DRAIN AT VILL. DHAHUKE (WHERE IT ENTERS PAKISTAN), PUNJAB": "Hudiara Drain",
+            "DHANAULA DRAIN FALLING INTO LASSARA DRAIN NEAR VILL. DHUNAS": "Dhanaula Drain",
+            "POINT SOURSE BUDHA NALLAH, PUNJAB": "Budha Nallah",
+            "BRIDGE ON TUNG DHAB DRAIN, FATENGARH CHURIAN ROAD": "Tung Dhab Drain",
+            "RIVER BEAS U/S BEFORE CONF. OF MANALSU NALLAH": "Beas",
+            "NCP05 - River Ghaggar D/S of N-choe": "Ghaggar",
+            "NCP06 - N-choe before confluence with Ghaggar": "N-Choe",
+            "3BRD": "",
+            "DRAIN AT VILL SAGRA DIST": "",
+        }
+        for label, expected in cases.items():
+            self.assertEqual(parse_water_body(label), expected, label)
+        self.assertGreaterEqual(name_similarity("Budha Nallah", "Budda Nala"), 0.8)
+        self.assertGreaterEqual(name_similarity("Sutlej", "Satluj"), 0.8)
+        self.assertGreaterEqual(name_similarity("Lassara Drain", "Lissara Nala"), 0.8)
+        self.assertLess(name_similarity("Attawa Choa", "Tangori Choe"), 0.8)
+
+    def test_label_names_match_beyond_snap_limit_and_group_unmapped_names(self):
+        from opengeostreams.opengeostreams.network import build_channel_network
+        extra = pd.DataFrame([
+            # 5.5 km from Test Drain: too far to snap, but named in the label.
+            {"Parameter": "pH", "Value": 7, "Location": "TEST DRAIN AT VILLAGE", "Latitude": 30.05, "Longitude": 76.05, "Date": "01-01-2024"},
+            # A drain that is not in the network: grouped by name, spelling variants merged.
+            {"Parameter": "pH", "Value": 7, "Location": "HUDIARA DRAIN AT BRIDGE", "Latitude": 31.5, "Longitude": 74.9, "Date": "01-01-2024"},
+            {"Parameter": "pH", "Value": 7, "Location": "OUTLET OF HUDIARA DRAIN", "Latitude": 31.6, "Longitude": 74.95, "Date": "01-01-2024"},
+        ])
+        result = build_channel_network(self.frame(extra), network=self.network())
+        drain = next(channel for channel in result["channels"] if channel["name"] == "Test Drain")
+        named = next(station for station in drain["stations"] if station["location"] == "TEST DRAIN AT VILLAGE")
+        self.assertEqual(named["assignedBy"], "name in station label")
+        hudiara = next(channel for channel in result["channels"] if channel["name"] == "Hudiara Drain")
+        self.assertEqual(len(hudiara["stations"]), 2)
+        self.assertFalse(hudiara["ordered"])
+        self.assertNotIn("HUDIARA DRAIN AT BRIDGE", [item["location"] for item in result["unassigned"]])
+
+    def test_terrain_elevation_decides_direction_and_labels_break_ties(self):
+        from opengeostreams.opengeostreams import network
+        # Make the west end the lowest: flow now runs west, away from Big River.
+        fake = lambda points, timeout=10: {(round(x, 5), round(y, 5)): 400 + 500 * (x - 76.0) for x, y in points}
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OPENGEOSTREAMS_OFFLINE", None)
+            with patch.object(network, "fetch_point_elevations", fake):
+                result = network.build_channel_network(self.frame(), network=self.network())
+        drain = next(channel for channel in result["channels"] if channel["name"] == "Test Drain")
+        self.assertEqual(drain["outletMethod"], "lowest end (terrain elevation)")
+        self.assertEqual([station["location"] for station in drain["stations"]], ["Down", "Middle", "Up"])
+        self.assertEqual(result["elevationSource"], "Open-Meteo elevation API (Copernicus DEM)")
+        ordered = [{"location": "River X D/S of town", "distanceToOutletKm": 10.4},
+                   {"location": "River X U/S town", "distanceToOutletKm": 10.0}]
+        network._apply_label_hints(ordered)
+        self.assertEqual(ordered[0]["location"], "River X U/S town")
+
+    def network(self):
+        import geopandas as gpd
+        from shapely.geometry import LineString
+        return gpd.GeoDataFrame({
+            "name": ["Test Drain", "Test Drain", "Big River"],
+            "kind": ["minor", "minor", "major"],
+        }, geometry=[
+            LineString([(76.0, 30.0), (76.1, 30.0)]),
+            LineString([(76.1, 30.0), (76.2, 30.0)]),
+            LineString([(76.2, 29.8), (76.2, 30.2)]),
+        ], crs="EPSG:4326")
+
+    def frame(self, extra=None):
+        rows = [
+            ("Down", 30.0005, 76.19), ("Up", 30.001, 76.02), ("Middle", 30.001, 76.11), ("Far away", 31.0, 77.0),
+        ]
+        frame = pd.DataFrame([{"Parameter": "pH", "Value": 7 + index, "Location": name, "Latitude": lat,
+                               "Longitude": lon, "Date": "01-01-2024"} for index, (name, lat, lon) in enumerate(rows)])
+        if extra is not None:
+            frame = pd.concat([frame, extra], ignore_index=True)
+        return frame
+
+    def test_stations_are_ordered_upstream_to_confluence(self):
+        from opengeostreams.opengeostreams.network import build_channel_network
+        result = build_channel_network(self.frame(), network=self.network())
+        drain = next(channel for channel in result["channels"] if channel["name"] == "Test Drain")
+        self.assertEqual([station["location"] for station in drain["stations"]], ["Up", "Middle", "Down"])
+        self.assertEqual([station["order"] for station in drain["stations"]], [1, 2, 3])
+        self.assertEqual(drain["joins"], "Big River")
+        self.assertEqual(drain["outletMethod"], "confluence")
+        distances = [station["distanceToOutletKm"] for station in drain["stations"]]
+        self.assertEqual(distances, sorted(distances, reverse=True))
+        self.assertEqual([item["location"] for item in result["unassigned"]], ["Far away"])
+        self.assertIsNotNone(result["unassigned"][0]["nearest"])
+
+    def test_distance_limit_and_file_column(self):
+        from opengeostreams.opengeostreams.network import build_channel_network
+        # "Down" is ~55 m from the line; "Up" and "Middle" are ~110 m away.
+        strict = build_channel_network(self.frame(), network=self.network(), max_distance_km=0.08)
+        self.assertEqual(sorted(item["location"] for item in strict["unassigned"]), ["Far away", "Middle", "Up"])
+        named = self.frame(pd.DataFrame([{"Parameter": "pH", "Value": 7, "Location": "Named", "Latitude": 30.03,
+                                          "Longitude": 76.05, "Date": "01-01-2024", "Drain": "Test Drain"}]))
+        dataset = ogs.from_dataframe(named)
+        self.assertIn("Water Body", dataset.data)
+        result = build_channel_network(dataset.data, network=self.network())
+        drain = next(channel for channel in result["channels"] if channel["name"] == "Test Drain")
+        self.assertIn("Named", [station["location"] for station in drain["stations"]])
+        self.assertEqual(next(s for s in drain["stations"] if s["location"] == "Named")["assignedBy"], "file column")
+        for value in (0, -1, float("nan"), True):
+            with self.assertRaises(ValueError):
+                build_channel_network(self.frame(), network=self.network(), max_distance_km=value)
+
+    def test_stream_figure_and_dashboard_endpoint(self):
+        import tempfile
+        from pathlib import Path
+        dataset = ogs.from_dataframe(self.frame())
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "network.parquet"
+            self.network().to_parquet(path)
+            table = dataset.assign_channels(network_path=path)
+            self.assertEqual(table.loc[table["Channel"] == "Test Drain", "Location"].tolist(), ["Up", "Middle", "Down"])
+            figure = dataset.plot_stream(parameter="pH", channel="test-drain")
+            self.assertEqual(list(figure.data[0].y), ["Up", "Middle", "Down"])
+            grouped = dataset.plot_stream(parameter="pH", group_by_channel=True)
+            self.assertEqual(list(grouped.data[0].y)[:3], ["Up", "Middle", "Down"])
+            self.assertEqual(grouped.layout.meta["streamGroups"][-1]["id"], "unassigned")
+            with self.assertRaises(ValueError):
+                dataset.plot_stream(parameter="pH", channel="no-such-drain")
+            os.environ["OPENGEOSTREAMS_NETWORK"] = str(path)
+            try:
+                fresh = ogs.from_dataframe(self.frame())
+                httpd = server.create_server(port=0, dataset=fresh)
+                worker = threading.Thread(target=httpd.serve_forever, daemon=True)
+                worker.start()
+                try:
+                    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+                    dataset_id = httpd.active_dataset
+                    payload = json.loads(urllib.request.urlopen(f"{base}/api/network?id={dataset_id}").read())
+                    self.assertTrue(payload["available"])
+                    self.assertEqual(payload["channels"][0]["stations"][0]["location"], "Up")
+                    self.assertIsNotNone(payload["channels"][0]["geometry"])
+                    figure = json.loads(urllib.request.urlopen(
+                        f"{base}/api/figure?id={dataset_id}&kind=stream&parameter=pH&year=all&channel=test-drain").read())
+                    self.assertEqual(figure["data"][0]["y"], ["Up", "Middle", "Down"])
+                finally:
+                    httpd.shutdown()
+                    httpd.server_close()
+                    worker.join()
+            finally:
+                os.environ.pop("OPENGEOSTREAMS_NETWORK", None)
+
+
+class StationLabelMergeTests(unittest.TestCase):
+    """Label variants of the same site get one name; different sites never merge."""
+
+    def rows(self, entries):
+        return [{"Location": name, "Latitude": str(lat), "Longitude": str(lon)} for name, lat, lon in entries]
+
+    def test_fragments_and_pasted_coordinates_merge(self):
+        from opengeostreams.opengeostreams.pipeline import merge_duplicate_locations
+        rows = self.rows([
+            ("POINT SOURSE BUDHA NALLAH, PUNJAB", 30.920155, 75.978229),
+            ("SOURSE BUDHA NALLAH, PUNJAB 30.973", 30.920155, 75.978229),
+            ("OUTLET OF NADIALA DRAIN INTO DHAKANSU NALLAH, PUNJAB", 30.509242, 76.595725),
+            ("OF NADIALA INTO DHAKANSU PUNJAB", 30.508634, 76.596340),
+        ])
+        merges = merge_duplicate_locations(rows)
+        self.assertEqual({item["name"] for item in merges},
+                         {"POINT SOURSE BUDHA NALLAH, PUNJAB", "OUTLET OF NADIALA DRAIN INTO DHAKANSU NALLAH, PUNJAB"})
+        self.assertEqual(len({row["Location"] for row in rows}), 2)
+
+    def test_different_sites_stay_separate(self):
+        from opengeostreams.opengeostreams.pipeline import merge_duplicate_locations
+        rows = self.rows([
+            ("RIVER BEAS AT U/S MANALI", 32.243187, 77.189176),
+            ("RIVER BEAS AT D/S MANALI", 32.243187, 77.189176),
+            ("RIVER BEAS AT MANALI", 32.243187, 77.189176),
+            ("MAHANADI MUHANA NORTH (5 KM FROM SHORE)", 20.3, 86.7),
+            ("MAHANADI MUHANA SOUTH (5 KM FROM SHORE)", 20.3, 86.7),
+            ("MAHANADI MUHANA (5 KM FROM SHORE)", 20.3, 86.7),
+            ("SECTOR 36 DRAIN", 30.70, 76.75),
+            ("SECTOR 36 DRAIN", 30.70, 76.75),
+            ("DRAIN", 30.70, 76.75),
+            ("RIVER X AT TOWN BRIDGE", 30.0, 76.0),
+            ("RIVER X AT TOWN BRIDGE NORTH GATE", 30.05, 76.0),   # 5.5 km away
+        ])
+        merges = merge_duplicate_locations(rows)
+        merged_names = [name for item in merges for name in item["merged"]]
+        self.assertNotIn("RIVER BEAS AT U/S MANALI", merged_names + [item["name"] for item in merges if "D/S" in item["name"]])
+        self.assertFalse(any("NORTH" in item["name"] and any("SOUTH" in name for name in item["merged"]) for item in merges))
+        self.assertFalse(any("SOUTH" in item["name"] and any("NORTH" in name for name in item["merged"]) for item in merges))
+        self.assertNotIn("DRAIN", merged_names)            # single-word labels never merge
+        self.assertNotIn("RIVER X AT TOWN BRIDGE NORTH GATE", merged_names)
+        self.assertNotIn("RIVER X AT TOWN BRIDGE", merged_names)
+        locations = {row["Location"] for row in rows}
+        self.assertIn("RIVER BEAS AT U/S MANALI", locations)
+        self.assertIn("RIVER BEAS AT D/S MANALI", locations)
+
+    def test_dataset_option_and_summary(self):
+        frame = pd.DataFrame([
+            {"Parameter": "pH", "Value": 7, "Location": "POINT SOURCE BUDHA NALLAH", "Latitude": 30.92, "Longitude": 75.97, "Date": "01-01-2024"},
+            {"Parameter": "pH", "Value": 8, "Location": "SOURCE BUDHA NALLAH 30.973", "Latitude": 30.92, "Longitude": 75.97, "Date": "01-01-2025"},
+        ])
+        dataset = ogs.from_dataframe(frame)
+        self.assertEqual(dataset.data["Location"].nunique(), 1)
+        self.assertEqual(dataset.summary["mergedLocations"][0]["merged"], ["SOURCE BUDHA NALLAH 30.973"])
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "stations.csv"
+            frame.to_csv(path, index=False)
+            self.assertEqual(ogs.load_csv(path, rows="all", merge_stations=False).data["Location"].nunique(), 2)
+            self.assertEqual(ogs.load_csv(path, rows="all").data["Location"].nunique(), 1)

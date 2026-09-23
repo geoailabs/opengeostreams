@@ -132,6 +132,12 @@ def parse_date_bounds(value: Any) -> tuple[datetime, datetime, str]:
     return start, end, precision
 
 
+WATER_BODY_COLUMNS = (
+    "Water Body", "Water Body Name", "Waterbody", "Drain", "Drain Name",
+    "River", "River Name", "Channel", "Stream",
+)
+
+
 def resolve_location(row: dict[str, str], filename: str) -> str:
     return clean(row.get("Location")) or KNOWN_LOCATIONS.get(filename, "")
 
@@ -152,7 +158,140 @@ def standardize_rows(rows: Iterable[dict[str, str]], filename: str) -> list[dict
             "Latitude": clean(row.get("Latitude")),
             "Longitude": clean(row.get("Longitude")),
         })
+        # Optional drain/river name used to group stations (see network.py).
+        water_body = next((clean(row.get(key)) for key in WATER_BODY_COLUMNS if clean(row.get(key))), "")
+        if water_body:
+            standardized[-1]["Water Body"] = water_body
     return standardized
+
+
+_COORDINATE_NUMBER = re.compile(r"(?<![A-Za-z0-9])\d{1,3}\.\d+(?![A-Za-z0-9])")
+_US_LABEL = re.compile(r"\b(?:U\s*/\s*S|UPSTREAM)\b", re.IGNORECASE)
+_DS_LABEL = re.compile(r"\b(?:D\s*/\s*S|DOWNSTREAM)\b", re.IGNORECASE)
+# Extra words that make a label a different site, not a variant of the same one.
+_SITE_WORDS = {"U", "S", "D", "UPSTREAM", "DOWNSTREAM", "BEFORE", "AFTER", "CONFLUENCE", "CONF",
+               "ABOVE", "BELOW", "INLET", "OUTLET", "INTAKE", "EXIT", "ENTRY", "ORIGIN",
+               "NORTH", "SOUTH", "EAST", "WEST", "LEFT", "RIGHT", "OLD", "NEW"}
+# Labels that start like this are fragments of a longer label split by PDF extraction.
+_FRAGMENT_START = {"OF", "INTO", "AT", "ON", "FALLING", "TO", "AND", "WITH", "IN", "NEAR", "FROM"}
+
+
+def _label_tokens(label: str) -> frozenset[str]:
+    """Words in a station label, ignoring coordinates pasted into it (e.g. "... PUNJAB 30.973")."""
+    return frozenset(re.findall(r"[A-Z0-9]+", _COORDINATE_NUMBER.sub(" ", str(label).upper())))
+
+
+def _flow_marker(label: str) -> str:
+    upstream, downstream = bool(_US_LABEL.search(label)), bool(_DS_LABEL.search(label))
+    return "US" if upstream and not downstream else "DS" if downstream and not upstream else ""
+
+
+def merge_duplicate_locations(rows: list[dict[str, Any]], *, same_point_m: float = 150.0,
+                              nearby_m: float = 1000.0, max_extra_words: int = 3) -> list[dict[str, Any]]:
+    """Give one name to station labels that are variants of the same site.
+
+    Two labels merge when every word of one appears in the other (numbers that look
+    like coordinates are ignored) and the longer adds at most ``max_extra_words``;
+    their median coordinates agree (within ``same_point_m``, or ``nearby_m`` when
+    the shorter label has 3+ words); the extra words do not change the site (U/S,
+    D/S, before, outlet, north ...) unless the shorter label is an obvious
+    fragment; every label in a merged group is a sub-label of the others (no
+    chaining); and an upstream label is never merged with a downstream one.
+    Rows are updated in place; a list of {"name", "merged"} is returned.
+    """
+    coordinates: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    counts: dict[str, int] = defaultdict(int)
+    for row in rows:
+        name = str(row.get("Location") or "")
+        if not name:
+            continue
+        counts[name] += 1
+        lat, lon = number(row.get("Latitude")), number(row.get("Longitude"))
+        if lat is not None and lon is not None and -90 <= lat <= 90 and -180 <= lon <= 180:
+            coordinates[name].append((lat, lon))
+    names = [name for name in counts if coordinates.get(name)]
+    if len(names) < 2:
+        return []
+    centre = {name: (float(np.median([lat for lat, _ in coordinates[name]])),
+                     float(np.median([lon for _, lon in coordinates[name]]))) for name in names}
+    tokens = {name: _label_tokens(name) for name in names}
+
+    def fragment(name: str) -> bool:
+        words = re.findall(r"[A-Z]+", name.upper())
+        return bool(_COORDINATE_NUMBER.search(name)) or (bool(words) and words[0] in _FRAGMENT_START)
+
+    def comparable(a: str, b: str) -> bool:
+        return tokens[a] <= tokens[b] or tokens[b] <= tokens[a]
+    markers = {name: _flow_marker(name) for name in names}
+
+    def metres(a: str, b: str) -> float:
+        (lat1, lon1), (lat2, lon2) = centre[a], centre[b]
+        dy = (lat2 - lat1) * 111_320.0
+        dx = (lon2 - lon1) * 111_320.0 * math.cos(math.radians((lat1 + lat2) / 2))
+        return math.hypot(dx, dy)
+
+    parent = {name: name for name in names}
+    members = {name: {name} for name in names}
+
+    def find(name: str) -> str:
+        while parent[name] != name:
+            parent[name] = parent[parent[name]]
+            name = parent[name]
+        return name
+
+    # Only compare labels in neighbouring ~2 km grid cells.
+    cell_size = max(nearby_m, same_point_m) / 111_320.0
+    grid: dict[tuple[int, int], list[str]] = defaultdict(list)
+    for name in names:
+        grid[(int(centre[name][0] // cell_size), int(centre[name][1] // cell_size))].append(name)
+    for (row_cell, col_cell), cell_names in grid.items():
+        neighbours = [other for dr in (-1, 0, 1) for dc in (-1, 0, 1) for other in grid.get((row_cell + dr, col_cell + dc), [])]
+        for a in cell_names:
+            for b in neighbours:
+                if a >= b:
+                    continue
+                short_name, long_name = sorted((a, b), key=lambda item: len(tokens[item]))
+                small, large = tokens[short_name], tokens[long_name]
+                if len(small) < 2 or not small <= large or len(large - small) > max_extra_words:
+                    continue
+                if (large - small) & _SITE_WORDS and not fragment(short_name):
+                    continue
+                distance = metres(a, b)
+                if not (distance <= same_point_m or (distance <= nearby_m and len(small) >= 3)):
+                    continue
+                root_a, root_b = find(a), find(b)
+                if root_a == root_b:
+                    continue
+                if not all(comparable(x, y) for x in members[root_a] for y in members[root_b]):
+                    continue  # e.g. "MUHANA NORTH" and "MUHANA SOUTH" via a generic "MUHANA"
+                cluster_markers = {markers[item] for item in members[root_a] | members[root_b]} - {""}
+                if len(cluster_markers) > 1:  # never merge an upstream station with a downstream one
+                    continue
+                parent[root_b] = root_a
+                members[root_a] |= members.pop(root_b)
+
+    def preference(name: str):
+        # Prefer a whole label (not starting mid-sentence, no pasted coordinates), then the most words, then the most rows.
+        words = re.findall(r"[A-Z]+", name.upper())
+        starts_mid_sentence = bool(words) and words[0] in _FRAGMENT_START
+        return (starts_mid_sentence, bool(_COORDINATE_NUMBER.search(name)), -len(tokens[name]), -counts[name], name)
+
+    mapping, merges = {}, []
+    for root, cluster in members.items():
+        if len(cluster) < 2:
+            continue
+        best = min(cluster, key=preference)
+        # Drop a pasted coordinate from the kept name ("... VILL. 30.318 PUNJAB" -> "... VILL. PUNJAB").
+        canonical = " ".join(_COORDINATE_NUMBER.sub(" ", best).split()).strip(" ,") or best
+        merged = sorted(item for item in cluster if item != canonical)
+        merges.append({"name": canonical, "merged": merged})
+        mapping.update({item: canonical for item in merged})
+    if mapping:
+        for row in rows:
+            name = row.get("Location")
+            if name in mapping:
+                row["Location"] = mapping[name]
+    return sorted(merges, key=lambda item: item["name"])
 
 
 def validate_rows(rows: list[dict[str, Any]]) -> None:

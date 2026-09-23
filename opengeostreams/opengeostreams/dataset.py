@@ -21,7 +21,9 @@ MAX_PAGE_SIZE = 400
 class RiverDataset:
     """A processed river dataset with analysis, plotting, and dashboard methods."""
 
-    def __init__(self, csv_path: str | Path, *, rows: int = MAX_PAGE_SIZE) -> None:
+    def __init__(self, csv_path: str | Path, *, rows: int | str = MAX_PAGE_SIZE,
+                 merge_stations: bool = True) -> None:
+        self.merge_stations = merge_stations
         self.path = Path(csv_path).expanduser().resolve()
         if not self.path.is_file():
             raise FileNotFoundError(f"CSV file not found: {self.path}")
@@ -29,16 +31,19 @@ class RiverDataset:
             raise ValueError("Opengeostreams accepts CSV files only.")
         self._validate_rows(rows)
         self.total_rows = self._count_rows()
-        self._row_limit: int = rows
+        self._row_limit: int = self.total_rows if rows == "all" else rows
         self._dashboard_data: dict[str, Any] = {}
         self._interpolation: dict[str, Any] | None = None
+        self._channel_network: dict[str, Any] | None = None
         self.data = pd.DataFrame()
         self._reload()
 
     @staticmethod
-    def _validate_rows(rows: int) -> None:
+    def _validate_rows(rows: int | str) -> None:
+        if rows == "all":
+            return
         if not isinstance(rows, int) or isinstance(rows, bool) or rows < 1:
-            raise ValueError("rows must be a positive integer.")
+            raise ValueError("rows must be a positive integer or all.")
 
     def _count_rows(self) -> int:
         with self.path.open("r", encoding="utf-8-sig", newline="") as handle:
@@ -64,6 +69,8 @@ class RiverDataset:
             and not (column.lower() == "unit" and pipeline.clean(row.get("Parameter")).lower() == "ph")
             for row in raw) for column in columns}
         processed = pipeline.standardize_rows(raw, source_name)
+        # One name per site: labels like "POINT SOURCE BUDHA NALLAH" and "SOURCE BUDHA NALLAH 30.973".
+        self._merged_locations = pipeline.merge_duplicate_locations(processed) if getattr(self, "merge_stations", True) else []
         pipeline.validate_rows(processed)
         self._dashboard_data = pipeline.build_dashboard_data(
             processed,
@@ -77,6 +84,7 @@ class RiverDataset:
         self.data["Latitude"] = pd.to_numeric(self.data["Latitude"], errors="coerce")
         self.data["Longitude"] = pd.to_numeric(self.data["Longitude"], errors="coerce")
         self._interpolation = None
+        self._channel_network = None
 
     def __len__(self) -> int:
         return len(self.data)
@@ -104,11 +112,39 @@ class RiverDataset:
             "remainingRows": self.remaining_rows,
             "parameterCount": int(self.data["Parameter"].nunique()),
             "locationCount": int(self.data["Location"].nunique()),
+            "mergedLocations": getattr(self, "_merged_locations", []),
         }
 
     def head(self, rows: int = 5) -> pd.DataFrame:
         """Return the first processed rows, like pandas.DataFrame.head()."""
         return self.data.drop(columns=["NumericValue"], errors="ignore").head(rows).copy()
+
+    def fetch_elevations(self, *, project: str | None = None) -> pd.DataFrame:
+        """Fetch station surface elevations from Google Earth Engine."""
+        from .elevation import fetch_elevations
+        return fetch_elevations(self.data, project=project)
+
+    def channel_network(self, *, max_distance_km: float | None = None,
+                        network_path: str | Path | None = None, refresh: bool = False,
+                        use_elevation: bool = True) -> dict[str, Any]:
+        """Match stations to drains/rivers and order them upstream -> downstream.
+
+        Uses a drain/river name column, else a water-body name in the station
+        label, else the nearest India-WRIS line within ``max_distance_km``
+        (default 2 km). Direction uses terrain elevation of the channel ends
+        (Open-Meteo) when reachable. Cached; pass ``refresh=True`` to recompute.
+        """
+        from . import network
+        if self._channel_network is None or refresh or max_distance_km is not None or network_path is not None:
+            self._channel_network = network.build_channel_network(
+                self.data, max_distance_km=network.DEFAULT_MAX_DISTANCE_KM if max_distance_km is None else max_distance_km,
+                network_path=network_path, use_elevation=use_elevation)
+        return self._channel_network
+
+    def assign_channels(self, **kwargs: Any) -> pd.DataFrame:
+        """Return one row per station with its drain/river, upstream order and distances."""
+        from . import network
+        return network.channel_table(self.channel_network(**kwargs))
 
     def describe(self, parameter: str | None = None) -> pd.DataFrame:
         """Return descriptive statistics for all or one numeric parameter."""
@@ -211,20 +247,23 @@ class RiverDataset:
         return httpd
 
 
-def load_csv(csv_path: str | Path, *, rows: int = MAX_PAGE_SIZE) -> RiverDataset:
+def load_csv(csv_path: str | Path, *, rows: int | str = MAX_PAGE_SIZE, merge_stations: bool = True) -> RiverDataset:
     """Load the first ``rows`` CSV records (default: 400), excluding the header.
 
-    Accepts any positive integer.
+    Accepts any positive integer or ``rows="all"`` for the complete file.
     Limits larger than the file import all available records.
+    ``merge_stations`` gives one name to label variants of the same site
+    (see ``pipeline.merge_duplicate_locations``); pass False to keep labels as-is.
     """
-    return RiverDataset(csv_path, rows=rows)
+    return RiverDataset(csv_path, rows=rows, merge_stations=merge_stations)
 
 
 def from_dataframe(frame: pd.DataFrame) -> RiverDataset:
     """Create an independent dataset from all DataFrame rows, using the CSV schema.
 
     Revalidates data and rebuilds analysis metadata. Missing pandas values are
-    treated as empty CSV fields. Extra columns are omitted during standardization.
+    treated as empty CSV fields. Extra columns are omitted during standardization,
+    except a drain/river name column (e.g. "Drain", "River", "Water Body").
     """
     if not isinstance(frame, pd.DataFrame):
         raise TypeError("frame must be a pandas DataFrame.")

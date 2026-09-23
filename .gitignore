@@ -13,3 +13,10 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Large river network (157 MB, over GitHub's 100 MB limit) - download separately, see README
+data/indiawris/
+
+# Local assistant/scratch output
+Claude outputs/
+.tmp_check/
