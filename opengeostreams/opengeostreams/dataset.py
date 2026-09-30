@@ -10,6 +10,7 @@ from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable
 
+import numpy as np
 import pandas as pd
 
 from . import pipeline
@@ -113,7 +114,58 @@ class RiverDataset:
             "parameterCount": int(self.data["Parameter"].nunique()),
             "locationCount": int(self.data["Location"].nunique()),
             "mergedLocations": getattr(self, "_merged_locations", []),
+            "coordinateConflicts": self.coordinate_conflicts(),
         }
+
+    def coordinate_conflicts(self, *, min_spread_m: float = 500.0) -> list[dict[str, Any]]:
+        """Stations whose rows give different coordinates more than ``min_spread_m`` apart.
+
+        Usually a copy/fill-down mistake in the source file; the median position is used,
+        which is wrong when most rows carry the mistake, so these are worth checking.
+        """
+        frame = self.data[["Location", "Latitude", "Longitude"]].copy()
+        frame["Latitude"] = pd.to_numeric(frame["Latitude"], errors="coerce").round(6)
+        frame["Longitude"] = pd.to_numeric(frame["Longitude"], errors="coerce").round(6)
+        frame = frame.dropna()
+        conflicts = []
+        for name, group in frame.groupby("Location", sort=True):
+            positions = group.value_counts(["Latitude", "Longitude"]).reset_index(name="rows")
+            if len(positions) < 2:
+                continue
+            lat = np.radians(positions["Latitude"].to_numpy())
+            lon = np.radians(positions["Longitude"].to_numpy())
+            dlat, dlon = lat[:, None] - lat[None, :], lon[:, None] - lon[None, :]
+            a = np.sin(dlat / 2) ** 2 + np.cos(lat[:, None]) * np.cos(lat[None, :]) * np.sin(dlon / 2) ** 2
+            spread = float((2 * 6_371_000 * np.arcsin(np.sqrt(np.clip(a, 0, 1)))).max())
+            if spread < min_spread_m:
+                continue
+            first = (group["Latitude"].iloc[0], group["Longitude"].iloc[0])  # what the map marker uses
+            conflicts.append({
+                "name": str(name), "spreadKm": round(spread / 1000.0, 2),
+                "positions": [{"latitude": float(row.Latitude), "longitude": float(row.Longitude), "rows": int(row.rows),
+                               "used": (row.Latitude, row.Longitude) == first}
+                              for row in positions.itertuples()],
+            })
+        return conflicts
+
+    def to_csv(self, path: str | Path | None = None) -> str | Path:
+        """Write the loaded measurements in the standard CSV schema.
+
+        Returns the CSV text when ``path`` is None, otherwise the written path.
+        Columns: SrNo, Parameter, Unit, Date, Value, Data Source, Location,
+        Latitude, Longitude (and Water Body when present).
+        """
+        frame = self.data.drop(columns=["NumericValue"], errors="ignore").copy()
+        frame["SrNo"] = range(1, len(frame) + 1)
+        columns = ["SrNo", "Parameter", "Unit", "Date", "Value", "Data Source", "Location", "Latitude", "Longitude"]
+        columns += [column for column in frame.columns if column not in columns]
+        frame = frame.reindex(columns=columns)
+        if path is None:
+            return frame.to_csv(index=False)
+        destination = Path(path).expanduser().resolve()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        frame.to_csv(destination, index=False, encoding="utf-8")
+        return destination
 
     def head(self, rows: int = 5) -> pd.DataFrame:
         """Return the first processed rows, like pandas.DataFrame.head()."""
@@ -153,10 +205,21 @@ class RiverDataset:
             frame = frame[frame["Parameter"].astype(str).str.casefold() == pipeline.normalize_parameter(parameter).casefold()]
         return frame.groupby("Parameter")["NumericValue"].describe()
 
-    def interpolate(self, *, max_distance_km: float = 8.0, river_mask_path: str | Path | None = None) -> tuple["RiverDataset", dict[str, Any]]:
-        """Interpolate numeric measurements and return ``(data, summary)``."""
+    def interpolate(self, *, max_distance_km: float = 8.0, river_mask_path: str | Path | None = None,
+                    follow_rivers: bool = True) -> tuple["RiverDataset", dict[str, Any]]:
+        """Interpolate numeric measurements and return ``(data, summary)``.
+
+        With ``follow_rivers`` (default) and no ``river_mask_path``, the surface is
+        clipped to a corridor along the drains/rivers matched by
+        :meth:`channel_network`, so values are not spread across dry land. If the
+        river network is unavailable the full rectangle is used, as before.
+        """
+        river_mask = None
+        if river_mask_path is None and follow_rivers:
+            river_mask = self._network_river_mask()
         self._interpolation = pipeline.build_interpolation_data(
-            self._dashboard_data, output_path=None, max_distance_km=max_distance_km, river_mask_path=river_mask_path
+            self._dashboard_data, output_path=None, max_distance_km=max_distance_km,
+            river_mask_path=river_mask_path, river_mask=river_mask,
         )
         all_years = self._interpolation["surfaces"]["allYears"]
         yearly = self._interpolation["surfaces"]["yearly"]
@@ -169,6 +232,18 @@ class RiverDataset:
             "parameters": sorted({item["parameter"] for item in all_years}),
         }
         return self, result
+
+    def _network_river_mask(self) -> dict[str, Any] | None:
+        records = self._dashboard_data.get("records", [])
+        extent = pipeline.interpolation_extent(records, None)
+        stations = sorted({(record["latitude"], record["longitude"]) for record in records if record.get("hasCoordinates")})
+        if extent is None or not stations:
+            return None
+        try:
+            from . import network
+            return network.river_corridor_mask(self.channel_network(), extent, stations)
+        except Exception:  # geopandas or the WRIS file missing: fall back to the full rectangle
+            return None
 
     def _output(self, figure: Any, save_path: str | Path | None):
         if save_path is None:
@@ -258,7 +333,7 @@ def load_csv(csv_path: str | Path, *, rows: int | str = MAX_PAGE_SIZE, merge_sta
     return RiverDataset(csv_path, rows=rows, merge_stations=merge_stations)
 
 
-def from_dataframe(frame: pd.DataFrame) -> RiverDataset:
+def from_dataframe(frame: pd.DataFrame, *, name: str = "dataframe") -> RiverDataset:
     """Create an independent dataset from all DataFrame rows, using the CSV schema.
 
     Revalidates data and rebuilds analysis metadata. Missing pandas values are
@@ -274,16 +349,20 @@ def from_dataframe(frame: pd.DataFrame) -> RiverDataset:
     dataset = RiverDataset.__new__(RiverDataset)
     dataset.path = None
     dataset._row_limit = len(raw)
-    dataset._set_data(raw, "dataframe")
+    dataset._set_data(raw, str(name or "dataframe"))
     dataset.total_rows = dataset.loaded_rows
     return dataset
 
 
-def concat(datasets: Iterable[RiverDataset | pd.DataFrame]) -> RiverDataset:
+def concat(datasets: Iterable[RiverDataset | pd.DataFrame], *, name: str = "dataframe",
+           station: str | None = None) -> RiverDataset:
     """Combine loaded dataset rows or DataFrames into a new RiverDataset.
 
     Preserves input order and duplicate measurements, resets row numbering,
-    and leaves inputs unchanged. Unloaded CSV rows are not read.
+    and leaves inputs unchanged. Unloaded CSV rows are not read. ``name`` labels
+    the result (e.g. in the dashboard). ``station`` gives every row one station
+    name, for files that all describe the same monitoring site; label variants of
+    one site are otherwise merged automatically (see ``merge_stations``).
     """
     frames = []
     for item in datasets:
@@ -295,4 +374,10 @@ def concat(datasets: Iterable[RiverDataset | pd.DataFrame]) -> RiverDataset:
             raise TypeError("concat accepts RiverDataset objects or pandas DataFrames.")
     if not frames:
         raise ValueError("Provide at least one dataset or DataFrame to concatenate.")
-    return from_dataframe(pd.concat(frames, ignore_index=True))
+    combined = pd.concat(frames, ignore_index=True)
+    if station is not None:
+        station = " ".join(str(station).split())
+        if not station:
+            raise ValueError("station must be a non-empty name.")
+        combined["Location"] = station
+    return from_dataframe(combined, name=name)

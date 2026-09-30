@@ -656,6 +656,90 @@ body.is-resizing * {
   gap: 6px;
 }
 
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.layer-item .layer-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.layer-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  cursor: pointer;
+}
+
+.layer-check input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.layer-download {
+  flex: none;
+  color: var(--muted);
+}
+
+.combine-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.combine-panel[hidden],
+.combine-form[hidden] {
+  display: none;
+}
+
+.combine-hint,
+.combine-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.combine-form {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-soft);
+}
+
+.combine-form .field {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.combine-form input[type="text"] {
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.combine-form input[type="text"][hidden] {
+  display: none;
+}
+
+.combine-form .btn {
+  width: 100%;
+}
+
 .layer-row {
   display: flex;
   align-items: center;
@@ -1641,6 +1725,45 @@ body.is-resizing * {
 .channel-station small {
   color: var(--muted);
   font-size: 11px;
+}
+
+.channel-value {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 16px;
+  margin: 2px 0 1px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.channel-value i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: color-mix(in srgb, var(--chart-accent) 55%, transparent);
+}
+
+.channel-value b {
+  position: relative;
+  padding: 0 6px;
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.channel-value.is-empty {
+  background: transparent;
+}
+
+.channel-value.is-empty b {
+  padding: 0;
+  color: var(--muted);
+  font-weight: 500;
 }
 
 .channel-station small.is-far {

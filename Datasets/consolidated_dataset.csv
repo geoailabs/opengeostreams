@@ -1419,17 +1419,17 @@ SrNo,Parameter,Unit,Date,Value,Data Source,Location,Latitude,Longitude
 1418,COD,mg/l,"[01-01-2024, 31-12-2024]",99,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
 1419,BOD,mg/l,"[01-01-2024, 31-12-2024]",31,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
 1420,TSS,mg/l,"[01-01-2024, 31-12-2024]",109,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
-1421,TDS,mg/l,"[01-01-2024, 31-12-2024]",476,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1422,Conductivity,mg/l,"[01-01-2024, 31-12-2024]",1030,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1423,Chloride,mg/l,"[01-01-2024, 31-12-2024]",87,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1424,Phosphate-P,mg/l,"[01-01-2024, 31-12-2024]",2.6,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1425,NO2-N,mg/l,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1426,NO3-N,mg/l,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1427,NH3-N,mg/l,"[01-01-2024, 31-12-2024]",22,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1428,SO4,mg/l,"[01-01-2024, 31-12-2024]",46,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1429,Colour,CU,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1430,TKN,mg/l,"[01-01-2024, 31-12-2024]",26,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
-1431,T-Coliform,MPN/100 ml,"[01-01-2024, 31-12-2024]",33x10^6,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.315357,76.628347
+1421,TDS,mg/l,"[01-01-2024, 31-12-2024]",476,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1422,Conductivity,mg/l,"[01-01-2024, 31-12-2024]",1030,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1423,Chloride,mg/l,"[01-01-2024, 31-12-2024]",87,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1424,Phosphate-P,mg/l,"[01-01-2024, 31-12-2024]",2.6,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1425,NO2-N,mg/l,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1426,NO3-N,mg/l,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1427,NH3-N,mg/l,"[01-01-2024, 31-12-2024]",22,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1428,SO4,mg/l,"[01-01-2024, 31-12-2024]",46,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1429,Colour,CU,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1430,TKN,mg/l,"[01-01-2024, 31-12-2024]",26,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
+1431,T-Coliform,MPN/100 ml,"[01-01-2024, 31-12-2024]",33x10^6,Green tribunal,NCP05 - River Ghaggar D/S of N-choe,30.305502,76.62738
 1432,pH,,"[01-01-2024, 31-12-2024]",7.7,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
 1433,COD,mg/l,"[01-01-2024, 31-12-2024]",87,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
 1434,BOD,mg/l,"[01-01-2024, 31-12-2024]",27,Green tribunal,NCP07 - River Ghaggar U/S N-choe,30.305502,76.635388
@@ -1449,17 +1449,17 @@ SrNo,Parameter,Unit,Date,Value,Data Source,Location,Latitude,Longitude
 1448,COD,mg/l,"[01-01-2024, 31-12-2024]",156,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
 1449,BOD,mg/l,"[01-01-2024, 31-12-2024]",50,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
 1450,TSS,mg/l,"[01-01-2024, 31-12-2024]",81,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
-1451,TDS,mg/l,"[01-01-2024, 31-12-2024]",460,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1452,Conductivity,mg/l,"[01-01-2024, 31-12-2024]",983,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1453,Chloride,mg/l,"[01-01-2024, 31-12-2024]",75,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1454,Phosphate-P,mg/l,"[01-01-2024, 31-12-2024]",3,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1455,NO2-N,mg/l,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1456,NO3-N,mg/l,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1457,NH3-N,mg/l,"[01-01-2024, 31-12-2024]",26,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1458,SO4,mg/l,"[01-01-2024, 31-12-2024]",58,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1459,Colour,CU,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1460,TKN,mg/l,"[01-01-2024, 31-12-2024]",29,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
-1461,T-Coliform,MPN/100 ml,"[01-01-2024, 31-12-2024]",28x10^7,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.031831,76.635388
+1451,TDS,mg/l,"[01-01-2024, 31-12-2024]",460,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1452,Conductivity,mg/l,"[01-01-2024, 31-12-2024]",983,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1453,Chloride,mg/l,"[01-01-2024, 31-12-2024]",75,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1454,Phosphate-P,mg/l,"[01-01-2024, 31-12-2024]",3,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1455,NO2-N,mg/l,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1456,NO3-N,mg/l,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1457,NH3-N,mg/l,"[01-01-2024, 31-12-2024]",26,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1458,SO4,mg/l,"[01-01-2024, 31-12-2024]",58,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1459,Colour,CU,"[01-01-2024, 31-12-2024]",0,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1460,TKN,mg/l,"[01-01-2024, 31-12-2024]",29,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
+1461,T-Coliform,MPN/100 ml,"[01-01-2024, 31-12-2024]",28x10^7,Green tribunal,NCP06 - N-choe before confluence with Ghaggar,30.315357,76.628347
 1462,pH,-,"[01-11-2024, 30-11-2024]",8.1,professor,"Attawa Choa (Leisure valley garden, Mohali)",30.700708,76.738215
 1463,pH,-,"[01-12-2024, 31-12-2024]",7.8,professor,"Attawa Choa (Leisure valley garden, Mohali)",30.700708,76.738215
 1464,pH,-,"[01-01-2025, 31-01-2025]",7.5,professor,"Attawa Choa (Leisure valley garden, Mohali)",30.700708,76.738215

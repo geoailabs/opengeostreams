@@ -265,6 +265,7 @@ def _channel_order(dataset, channel=None, group_by_channel=False):
         if match is None:
             raise ValueError(f"Unknown drain/river: {channel}")
         stations = [item["location"] for item in match["stations"]]
+        stations += [item["location"] for item in match.get("downstream", []) if item["location"] not in stations]
         return stations, {"streamChannel": {"id": match["id"], "name": match["name"], "stations": stations,
                                             "ordered": bool(match.get("ordered", True))}}
     order, groups = [], []

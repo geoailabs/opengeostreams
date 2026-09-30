@@ -267,7 +267,7 @@
     });
     elevationOrderActive = stationElevations.size > 0;
     [...stationElevations.keys()].sort(compareElevation).forEach((name, index) => elevationRanks.set(name, index + 1));
-    markers.forEach((marker, name) => marker.setPopupContent(buildLocationPopup(name)));
+    invalidateViewCache();
     refreshMarkerStyles(false);
     updateMapLabels();
     refreshStreamVisualization();
@@ -376,11 +376,42 @@
 
   let streamPage = 0;
   const streamPageSize = 8;
+  // Stream pages as [firstRow, lastRow] pairs. A single drain/river is always
+  // shown on one page; the grouped view never splits a drain across pages.
+  let streamPages = [];
+  function buildStreamPages(count, groups, singleChannel) {
+    if (!count) return [];
+    if (singleChannel) return [[0, count - 1]];
+    const pages = [];
+    if (groups?.length) {
+      let first = null;
+      let last = -1;
+      groups.forEach(group => {
+        const start = group.start;
+        const end = group.start + group.count - 1;
+        if (first !== null && end - first + 1 > streamPageSize) {
+          pages.push([first, last]);
+          first = null;
+        }
+        if (first === null) first = start;
+        last = end;
+      });
+      if (first !== null) pages.push([first, last]);
+      return pages;
+    }
+    for (let first = 0; first < count; first += streamPageSize) pages.push([first, Math.min(count, first + streamPageSize) - 1]);
+    return pages;
+  }
+  function streamPageRange(page = streamPage) {
+    return streamPages[page] || [0, -1];
+  }
+  function streamRowHeight(rows) {
+    return rows > 40 ? 22 : rows > 16 ? 30 : 42;
+  }
 
   // Separator lines and drain/river labels for the grouped stream view (current page only).
   function streamGroupDecorations(groups, rows, page, layout, theme) {
-    const first = page * streamPageSize;
-    const last = Math.min(rows.length, first + streamPageSize) - 1;
+    const [first, last] = streamPageRange(page);
     const shapes = [];
     const annotations = (layout.annotations || []).filter(annotation => annotation.name !== "stream-group");
     groups.forEach((group, index) => {
@@ -414,9 +445,16 @@
       return;
     }
     select.disabled = true;
-    note.textContent = "Matching stations to the river network…";
+    const started = Date.now();
+    const showProgress = () => {
+      const seconds = Math.round((Date.now() - started) / 1000);
+      note.textContent = `Matching stations to the river network… ${seconds} s`
+        + (seconds >= 8 ? " (large files can take up to a minute; the A–Z view works meanwhile)" : "");
+    };
+    showProgress();
+    const timer = setInterval(showProgress, 1000);
     try {
-      const response = await fetch(`/api/network?id=${encodeURIComponent(dashboardData.datasetId)}`);
+      const response = await fetch(`/api/network?id=${encodeURIComponent(dashboardData.datasetId)}`).finally(() => clearInterval(timer));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "River network request failed.");
       if (!payload.available) throw new Error(payload.error || "River network unavailable.");
@@ -432,7 +470,10 @@
     // One drain at a time is the main view; overview options come last.
     const drainGroup = document.createElement("optgroup");
     drainGroup.label = "Analyse one drain / river";
-    channels.forEach(channel => drainGroup.appendChild(new Option(`${channel.name} — ${channel.stations.length} station${channel.stations.length === 1 ? "" : "s"}`, channel.id)));
+    channels.forEach(channel => {
+      const extra = channel.downstream?.length ? ` + ${channel.downstream.length} downstream` : "";
+      drainGroup.appendChild(new Option(`${channel.name} — ${channel.stations.length} station${channel.stations.length === 1 ? "" : "s"}${extra}`, channel.id));
+    });
     const overview = document.createElement("optgroup");
     overview.label = "Overview";
     overview.append(
@@ -589,7 +630,7 @@
     const head = document.createElement("div");
     head.className = "channel-head";
     const facts = [
-      selected.networkName && selected.networkName !== selected.name ? `WRIS: ${selected.networkName}` : null,
+      selected.networkName && selected.networkName !== selected.name ? `called “${selected.networkName}” on the India-WRIS map` : null,
       selected.aliases?.length ? `also called ${selected.aliases.join(", ")}` : null,
       selected.joins ? `joins ${selected.joins}` : null,
       Number.isFinite(selected.lengthKm) ? `${formatKm(selected.lengthKm)} mapped` : null,
@@ -615,21 +656,42 @@
           ? "Direction taken from how the line is drawn (elevation unavailable, no confluence found) — please check it."
           : "Grouped by the name in the station labels; this drain is not in the river network, so stations are in file order.";
     box.appendChild(caption);
+    // Latest value of the selected parameter at each station: a simple profile along the drain.
+    const profileValues = new Map();
+    // Stations on the receiving river labelled "D/S of <this drain>" close the list.
+    const shownStations = [...selected.stations, ...(selected.downstream || [])
+      .filter(item => !selected.stations.some(station => station.location === item.location))
+      .map((item, index) => ({...item, order: selected.stations.length + index + 1, downstreamReference: true}))];
+    shownStations.forEach(station => {
+      const records = getRecordsForLocationPeriod(station.location, state.selectedParameter)
+        .filter(record => Number.isFinite(record.numericValue));
+      const latest = records[records.length - 1];
+      if (!latest) return;
+      const sameDate = records.filter(record => record.date === latest.date);
+      const value = sameDate.reduce((sum, record) => sum + record.numericValue, 0) / sameDate.length;
+      profileValues.set(station.location, {value, label: `${formatCompactNumber(value)}${latest.unit ? ` ${latest.unit}` : ""}${sameDate.length > 1 ? " (mean of min/max)" : ""} · ${sameDate.length > 1 ? (latest.year || latest.dateLabel || "") : (latest.timelineLabel || latest.dateLabel || latest.year || "")}`});
+    });
+    const profileMax = Math.max(0, ...[...profileValues.values()].map(item => item.value));
     const list = document.createElement("ol");
     list.className = "channel-stations";
-    selected.stations.forEach(station => {
+    shownStations.forEach(station => {
       const item = document.createElement("li");
       const far = Number.isFinite(station.snapDistanceM) && station.snapDistanceM > 500;
-      const unplaced = selected.ordered !== false && !Number.isFinite(station.distanceToOutletKm);
+      const unplaced = !station.downstreamReference && selected.ordered !== false && !Number.isFinite(station.distanceToOutletKm);
       const matched = {"file column": "from file column", "name in station label": "matched by name",
-        "same name as other stations": "same name as other stations", "nearest line": "nearest line"}[station.assignedBy] || "";
-      const details = [
+        "same name as other stations": "same name as other stations", "nearest line": "nearest line",
+        "nearest line (beyond 2 km, next to other stations)": "nearest line (over 2 km away, near other stations)"}[station.assignedBy] || "";
+      const details = station.downstreamReference ? `${selected.joins ? `On ${selected.joins}` : "On the receiving river"}, downstream of ${selected.name}` : [
         unplaced ? "position unknown — coordinates are far from the drain" : null,
         Number.isFinite(station.distanceToOutletKm) ? `${formatKm(station.distanceToOutletKm)} above the ${selected.outletMethod === "confluence" ? "confluence" : "outlet"}` : null,
         Number.isFinite(station.snapDistanceM) ? `${formatKm(station.snapDistanceM / 1000)} from the line` : null,
         matched,
       ].filter(Boolean).join(" · ");
-      item.innerHTML = `<span class="channel-order${unplaced ? " is-unplaced" : ""}">${unplaced ? "?" : station.order}</span><button type="button" class="channel-station${station.location === state.selectedLocation ? " is-active" : ""}"><span>${escapeHtml(station.location)}</span><small class="${far ? "is-far" : ""}">${escapeHtml(details)}</small></button>`;
+      const reading = profileValues.get(station.location);
+      const bar = reading
+        ? `<span class="channel-value"><i style="width:${Math.max(3, Math.round(100 * reading.value / (profileMax || 1)))}%"></i><b>${escapeHtml(reading.label)}</b></span>`
+        : `<span class="channel-value is-empty"><b>no ${escapeHtml(state.selectedParameter || "value")} for this period</b></span>`;
+      item.innerHTML = `<span class="channel-order${unplaced ? " is-unplaced" : ""}">${unplaced ? "?" : station.order}</span><button type="button" class="channel-station${station.location === state.selectedLocation ? " is-active" : ""}"><span>${escapeHtml(station.location)}</span>${bar}<small class="${far ? "is-far" : ""}">${escapeHtml(details)}</small></button>`;
       item.querySelector("button").addEventListener("click", () => selectLocation(station.location, {focusMap: true}));
       list.appendChild(item);
     });
@@ -654,6 +716,12 @@
     };
   }
 
+  function streamChartHeight(figure, stationCount) {
+    streamPages = buildStreamPages(stationCount, figure.layout.meta?.streamGroups, Boolean(figure.layout.meta?.streamChannel));
+    const rows = Math.max(1, ...streamPages.map(([first, last]) => last - first + 1));
+    return Math.max(280, rows * streamRowHeight(rows) + 180);
+  }
+
   function chartLayout(kind, figure) {
     const theme = chartTheme();
     const heatmap = figure.data.find(trace => trace.type === "heatmap");
@@ -666,7 +734,7 @@
     });
     const layout = {
       ...figure.layout, autosize: true, width: undefined,
-      height: kind === "stream" ? Math.max(280, Math.min(stationCount, streamPageSize) * 42 + 180) : kind === "interpolation" ? 440 : 380,
+      height: kind === "stream" ? streamChartHeight(figure, stationCount) : kind === "interpolation" ? 440 : 380,
       margin: {l: kind === "stream" ? 110 : 48, r: kind === "stream" ? 14 : kind === "trend" ? 48 : 42, t: 35, b: kind === "stream" ? 140 : kind === "trend" ? 95 : 65},
       title: {...figure.layout.title, text: ""},
       font: {family: "Manrope, sans-serif", size: 12, color: theme.text},
@@ -688,7 +756,9 @@
     } else if (kind === "stream" && heatmap) {
       layout.yaxis.title.text = "";
       layout.yaxis.autorange = false;
-      layout.yaxis.range = [Math.min(stationCount, (streamPage + 1) * streamPageSize) - 0.5, streamPage * streamPageSize - 0.5];
+      const [pageFirst, pageLast] = streamPageRange();
+      layout.yaxis.range = [pageLast + 0.5, pageFirst - 0.5];
+      if (pageLast - pageFirst + 1 > 16) layout.yaxis.tickfont = {...layout.yaxis.tickfont, size: 10};
       layout.xaxis.title.standoff = 8;
       layout.yaxis.tickmode = "array";
       // Drain/river views keep the server's upstream -> downstream order.
@@ -825,15 +895,16 @@
         installTrendHover(element, "stream");
         const count = figure.data.find(trace => trace.type === "heatmap")?.y?.length || 0;
         const pager = document.getElementById("stream-pagination");
-        pager.hidden = count <= streamPageSize;
+        pager.hidden = streamPages.length <= 1;
         const updatePage = () => {
           document.getElementById("stream-tooltip")?.classList.add("is-hidden");
-          document.getElementById("stream-page-label").textContent = `${streamPage * streamPageSize + 1}-${Math.min(count, (streamPage + 1) * streamPageSize)} of ${count} stations`;
+          const [first, last] = streamPageRange();
+          document.getElementById("stream-page-label").textContent = `${first + 1}-${last + 1} of ${count} stations`;
           document.getElementById("stream-prev").disabled = streamPage === 0;
-          document.getElementById("stream-next").disabled = (streamPage + 1) * streamPageSize >= count;
+          document.getElementById("stream-next").disabled = streamPage >= streamPages.length - 1;
           const groups = figure.layout.meta?.streamGroups;
           const decorations = groups?.length ? streamGroupDecorations(groups, element.layout.yaxis.categoryarray, streamPage, element.layout, chartTheme()) : {};
-          Plotly.relayout(element, {"yaxis.range": [Math.min(count, (streamPage + 1) * streamPageSize) - 0.5, streamPage * streamPageSize - 0.5], ...decorations});
+          Plotly.relayout(element, {"yaxis.range": [last + 0.5, first - 0.5], ...decorations});
         };
         document.getElementById("stream-prev").onclick = () => { streamPage--; updatePage(); };
         document.getElementById("stream-next").onclick = () => { streamPage++; updatePage(); };
@@ -897,13 +968,15 @@
   // Create the Leaflet map and a custom pane for raster interpolation overlays.
   // Zoom buttons live in the dashboard's own map control stack (see ui.js).
   const map = L.map("map", {
+    // Canvas draws thousands of markers/lines far faster than one SVG node each.
+    preferCanvas: true,
     zoomControl: false,
     scrollWheelZoom: true,
   });
   syncMapOverlayOffsets();
   window.addEventListener("resize", syncMapOverlayOffsets);
   map.createPane("interpolationPane");
-  map.getPane("interpolationPane").style.zIndex = "350";
+  map.getPane("interpolationPane").style.zIndex = "370";
   map.getPane("interpolationPane").style.pointerEvents = "none";
 
   // Basemap choices exposed in the UI.
@@ -1034,16 +1107,8 @@
       fillOpacity: 0.92,
     }).addTo(map);
 
-    marker.bindPopup(
-      buildLocationPopup(location.name)
-    );
-    marker.bindTooltip("", {
-      permanent: true,
-      direction: "top",
-      offset: [0, -14],
-      className: "point-value-tooltip",
-      opacity: 1,
-    });
+    // Popup HTML is built only when a popup opens (not for every marker on every refresh).
+    marker.bindPopup(() => buildLocationPopup(location.name));
 
     marker.on("click", (event) => {
       if (event.originalEvent) {
@@ -1423,7 +1488,7 @@
   function buildLocationPopup(locationName) {
     const location = locationIndex.get(locationName);
     const isStp = isSewageTreatmentPlant(locationName);
-    const evaluation = evaluateLocationSuitability(locationName);
+    const evaluation = cachedSuitability(locationName);
     const reasonText = evaluation.reasons[0] || "No threshold exceedance found in the checked values.";
     const coverageText = evaluation.coverage
       ? `${evaluation.coverage.confirmed.length} confirmed, ${evaluation.coverage.proxy.length} proxy-only, ${evaluation.coverage.missing.length} missing checks`
@@ -1460,6 +1525,7 @@
       renderPeriodFilter();
       renderEmptyChart("No parameter data is available for this location.");
       renderBoxplotEmpty("No parameter distribution is available for this location.");
+      updateMapLabels();
       return;
     }
 
@@ -1530,6 +1596,7 @@
     refreshBoxplot();
     refreshParameterScale();
     updateMapLabels();
+    if (channelNetwork) renderChannelSummary();
     notifyUi();
   }
 
@@ -1550,6 +1617,7 @@
     refreshSuitabilitySummary();
     refreshParameterScale();
     refreshMarkerStyles(false);
+    if (channelNetwork) renderChannelSummary();
     updateMapLabels();
   }
 
@@ -2127,9 +2195,11 @@
       button.type = "button";
       button.className = `tab-button${parameter === state.selectedParameter ? " is-active" : ""}`;
       button.textContent = parameter;
-      button.title = isAvailable ? parameter : `${parameter}: select to view a station with measurements`;
-      button.setAttribute("aria-label", `${parameter}: ${description}`);
-      button.dataset.parameterDescription = description;
+      // No native title: the custom description tooltip below is the only hover text
+      // (a title attribute made the browser show a second tooltip on top of it).
+      const hint = isAvailable ? description : `${description} Select to view a station with measurements.`.trim();
+      button.setAttribute("aria-label", `${parameter}: ${hint}`);
+      button.dataset.parameterDescription = hint;
       button.addEventListener("mouseenter", () => showParameterDescription(button));
       button.addEventListener("mousemove", () => positionParameterDescription(button));
       button.addEventListener("mouseleave", hideParameterDescription);
@@ -2357,18 +2427,24 @@
 
   // Recolor map markers whenever suitability or selection state changes.
   function refreshMarkerStyles(openActivePopup = true) {
+    const activeRing = readCssColour("--marker-active-ring", "#111827");
+    const ring = readCssColour("--marker-ring", "#ffffff");
     markers.forEach((marker, locationName) => {
       const isActive = locationName === state.selectedLocation;
       const isStp = isSewageTreatmentPlant(locationName);
-      const suitability = evaluateLocationSuitability(locationName);
-      const markerColor = SUITABILITY_COLORS[suitability.status] || SUITABILITY_COLORS.unknown;
-      marker.setStyle({
+      const suitability = cachedSuitability(locationName);
+      const style = {
         radius: isActive ? 12 : 8,
-        fillColor: markerColor,
-        color: isActive ? readCssColour("--marker-active-ring", "#111827") : (isStp ? "#92400e" : readCssColour("--marker-ring", "#ffffff")),
+        fillColor: SUITABILITY_COLORS[suitability.status] || SUITABILITY_COLORS.unknown,
+        color: isActive ? activeRing : (isStp ? "#92400e" : ring),
         weight: isActive ? 3 : 2,
-      });
-      marker.setPopupContent(buildLocationPopup(locationName));
+      };
+      const key = `${style.radius}|${style.fillColor}|${style.color}|${style.weight}`;
+      if (marker._ogsStyleKey !== key) {
+        marker._ogsStyleKey = key;
+        marker.setStyle(style);
+      }
+      if (marker.isPopupOpen()) marker.getPopup().update();
     });
 
     const activeMarker = markers.get(state.selectedLocation);
@@ -2376,6 +2452,47 @@
       activeMarker.openPopup();
     }
     notifyUi();
+  }
+
+  // Per-view memo: suitability and period series depend only on the use case,
+  // period, year and parameter, so they are computed once per view instead of
+  // once per marker, label, popup and station-list row.
+  const viewCache = { key: "", suitability: new Map(), series: new Map(), stations: null };
+  function currentViewKey() {
+    return [state.selectedUseCase, state.selectedPeriod, state.selectedYear, state.selectedParameter, dataEpoch].join("|");
+  }
+  function syncViewCache() {
+    const key = currentViewKey();
+    if (viewCache.key !== key) {
+      viewCache.key = key;
+      viewCache.suitability.clear();
+      viewCache.series.clear();
+      viewCache.stations = null;
+    }
+  }
+  var dataEpoch = 0;
+  function invalidateViewCache() {
+    dataEpoch += 1;
+    syncViewCache();
+  }
+  function cachedSuitability(locationName) {
+    syncViewCache();
+    let value = viewCache.suitability.get(locationName);
+    if (!value) {
+      value = evaluateLocationSuitability(locationName);
+      viewCache.suitability.set(locationName, value);
+    }
+    return value;
+  }
+  function cachedPeriodRecords(locationName, parameter) {
+    syncViewCache();
+    const key = `${parameter}\u0000${locationName}`;
+    let value = viewCache.series.get(key);
+    if (!value) {
+      value = getRecordsForLocationPeriod(locationName, parameter);
+      viewCache.series.set(key, value);
+    }
+    return value;
   }
 
   function readCssColour(name, fallback) {
@@ -2408,9 +2525,15 @@
   }
 
   function getStations() {
+    syncViewCache();
+    if (!viewCache.stations) viewCache.stations = buildStationRows();
+    return viewCache.stations.map((row) => ({...row, active: row.name === state.selectedLocation}));
+  }
+
+  function buildStationRows() {
     return mappedLocations.map((location) => {
-      const evaluation = evaluateLocationSuitability(location.name);
-      const records = getRecordsForLocationPeriod(location.name, state.selectedParameter);
+      const evaluation = cachedSuitability(location.name);
+      const records = cachedPeriodRecords(location.name, state.selectedParameter);
       const latest = records[records.length - 1];
       // Ranges reported as Min/Max rows on the same date are shown together as "low – high".
       const endpoints = latest ? records.filter((record) => record.date === latest.date && getParameterVariant(record.parameter)) : [];
@@ -2440,45 +2563,44 @@
 
   // Permanent marker labels show the station name plus the latest visible value.
   function updateMapLabels() {
-    const selectedParameter = state.selectedParameter;
-
+    // Tooltip HTML is produced lazily (on hover, or when the tooltip is permanent),
+    // and only markers whose permanent/hover mode changed are re-bound.
     markers.forEach((marker, locationName) => {
-      const periodRecords = getRecordsForLocationPeriod(locationName, selectedParameter);
-      const latestRecord = periodRecords[periodRecords.length - 1];
-      const labelName = getMapLabelName(locationName);
-
-      if (!latestRecord) {
+      const permanent = markers.size <= 12 || locationName === state.selectedLocation;
+      if (marker._ogsLabelPermanent !== permanent || !marker.getTooltip()) {
+        marker._ogsLabelPermanent = permanent;
         marker.unbindTooltip();
-        marker.bindTooltip(`<span class="point-value-name">${escapeHtml(labelName)}</span>`, {
-          permanent: markers.size <= 12 || locationName === state.selectedLocation,
+        marker.bindTooltip(() => buildMapLabel(locationName), {
+          permanent,
           direction: "top",
           offset: [0, -14],
           className: "point-value-tooltip",
           opacity: 1,
         });
-        return;
+      } else if (marker.isTooltipOpen()) {
+        marker.getTooltip().update();
       }
-
-      let labelValue = Number.isFinite(latestRecord.numericValue)
-        ? formatCompactNumber(latestRecord.numericValue)
-        : latestRecord.rawValue || "NA";
-
-      const endpoints = periodRecords.filter(record => record.date === latestRecord.date && getParameterVariant(record.parameter));
-      const low = endpoints.find(record => getParameterVariant(record.parameter).toLowerCase() === "min");
-      const high = endpoints.find(record => getParameterVariant(record.parameter).toLowerCase() === "max");
-      if (low && high) labelValue = `${formatCompactNumber(low.numericValue)} - ${formatCompactNumber(high.numericValue)}`;
-      marker.unbindTooltip();
-      marker.bindTooltip([
-        `<span class="point-value-name">${escapeHtml(labelName)}</span>`,
-        `<span class="point-value-text">${escapeHtml(labelValue)}</span>`,
-      ].join(""), {
-        permanent: markers.size <= 12 || locationName === state.selectedLocation,
-        direction: "top",
-        offset: [0, -14],
-        className: "point-value-tooltip",
-        opacity: 1,
-      });
     });
+  }
+
+  function buildMapLabel(locationName) {
+    const periodRecords = cachedPeriodRecords(locationName, state.selectedParameter);
+    const latestRecord = periodRecords[periodRecords.length - 1];
+    const labelName = getMapLabelName(locationName);
+    if (!latestRecord) {
+      return `<span class="point-value-name">${escapeHtml(labelName)}</span>`;
+    }
+    let labelValue = Number.isFinite(latestRecord.numericValue)
+      ? formatCompactNumber(latestRecord.numericValue)
+      : latestRecord.rawValue || "NA";
+    const endpoints = periodRecords.filter(record => record.date === latestRecord.date && getParameterVariant(record.parameter));
+    const low = endpoints.find(record => getParameterVariant(record.parameter).toLowerCase() === "min");
+    const high = endpoints.find(record => getParameterVariant(record.parameter).toLowerCase() === "max");
+    if (low && high) labelValue = `${formatCompactNumber(low.numericValue)} - ${formatCompactNumber(high.numericValue)}`;
+    return [
+      `<span class="point-value-name">${escapeHtml(labelName)}</span>`,
+      `<span class="point-value-text">${escapeHtml(labelValue)}</span>`,
+    ].join("");
   }
 
   function getRecordsForLocationPeriod(locationName, parameter) {
@@ -2765,15 +2887,8 @@
       return state.selectedYear;
     }
 
-    if (state.selectedPeriod === "annual") {
-      // In annual mode with "all years" selected, use the currently highlighted trend point's
-      // year when possible so the interpolation overlay stays in sync with the selected sample.
-      const selectedRecord = getSelectedParameterScaleRecord();
-      if (selectedRecord && Number.isFinite(selectedRecord.year) && selectedRecord.year > 0) {
-        return selectedRecord.year;
-      }
-    }
-
+    // "All" years uses the all-years surface, so every station with this parameter
+    // is included (a single-year surface would drop stations sampled in other years).
     return null;
   }
 

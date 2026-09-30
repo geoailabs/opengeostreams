@@ -218,10 +218,34 @@ data.plot_stream(parameter="BOD", channel="tangori-choe")   # one drain, upstrea
 data.plot_stream(parameter="BOD", group_by_channel=True)    # all stations, grouped
 ```
 
+Names: the dashboard shows the local name from the station labels when most
+stations carry it, or when no label uses the WRIS name (WRIS calls the N-choe
+"Tangori Choe"; the WRIS name is still shown beside it). Local names that mean
+the same water body are listed in
+`opengeostreams/opengeostreams/reference_data/water_body_aliases.csv`
+(`alias,name`, e.g. `Attawa Choe,N-Choe`). Add your own in
+`data/water_body_aliases.csv` or a file named by `OPENGEOSTREAMS_ALIASES`.
+
 This is a geometric approximation of the network, not a hydrological model:
 WRIS names can differ from local names (the N-choe is "Tangori Choe" in WRIS),
 and coarse coordinates can land on a neighbouring drain, so check the
 "from the line" distances.
+
+## Combine files in the dashboard
+
+When two or more files are imported, each layer in **Data layers** gets a
+checkbox. Tick the files to combine, name the result, and click **Combine**.
+This runs `ogs.concat()` on the server and adds the result as a new layer (the
+originals are unchanged). Tick **All selected files are one station** and enter
+a name when the files describe one monitoring site under different labels (for
+example one CSV per year or per agency); otherwise stations keep their own
+names, with obvious label variants merged automatically. Every layer has a
+download button that saves it as one CSV in the standard schema.
+
+```python
+combined = ogs.concat([first, second], name="sector83.csv", station="Sector 83")
+combined.to_csv("sector83_all_years.csv")   # or combined.to_csv() for the text
+```
 
 ## Switch CSVs in the dashboard
 

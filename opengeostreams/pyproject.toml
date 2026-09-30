@@ -20,4 +20,4 @@ where = ["."]
 include = ["opengeostreams*"]
 
 [tool.setuptools.package-data]
-opengeostreams = ["dashboard_assets/*"]
+opengeostreams = ["dashboard_assets/*", "reference_data/*"]

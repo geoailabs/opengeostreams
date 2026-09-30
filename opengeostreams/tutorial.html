@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenGeoStreams Library Guide</title>
+<style>
+:root {
+  --bg: #f7f8f6;
+  --surface: #ffffff;
+  --surface-2: #f0f3f1;
+  --text: #1b2421;
+  --muted: #5b6863;
+  --border: #dce3df;
+  --accent: #0f766e;
+  --accent-soft: #e2f3f0;
+  --py: #3b5ba5;
+  --py-soft: #e7ecf8;
+  --js: #9a6a00;
+  --js-soft: #fbf1d9;
+  --http: #8a3b8f;
+  --http-soft: #f5e8f6;
+  --ext: #5b6863;
+  --ext-soft: #eceff0;
+  --code-bg: #f1f4f2;
+  --shadow: 0 1px 2px rgba(20, 30, 25, .06), 0 4px 16px rgba(20, 30, 25, .05);
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111615; --surface: #182020; --surface-2: #1e2827; --text: #e4ebe8; --muted: #9aa8a3;
+    --border: #2c3836; --accent: #4fd1c0; --accent-soft: #173532; --py: #8fa9ee; --py-soft: #1d2640;
+    --js: #e7bb58; --js-soft: #332a14; --http: #d69be0; --http-soft: #33203a; --ext: #a4b0ac;
+    --ext-soft: #232b2a; --code-bg: #1d2625; --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111615; --surface: #182020; --surface-2: #1e2827; --text: #e4ebe8; --muted: #9aa8a3;
+  --border: #2c3836; --accent: #4fd1c0; --accent-soft: #173532; --py: #8fa9ee; --py-soft: #1d2640;
+  --js: #e7bb58; --js-soft: #332a14; --http: #d69be0; --http-soft: #33203a; --ext: #a4b0ac;
+  --ext-soft: #232b2a; --code-bg: #1d2625; --shadow: none;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 16px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--sans); }
+a { color: var(--accent); }
+code, pre, kbd { font-family: var(--mono); font-size: .88em; }
+code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px; padding: .05em .35em; overflow-wrap: anywhere; }
+pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; line-height: 1.5; }
+pre code { background: none; border: 0; padding: 0; font-size: .85em; }
+
+.layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); max-width: 1320px; margin: 0 auto; }
+nav.toc { position: sticky; top: 0; height: 100vh; overflow-y: auto; padding: 28px 18px 28px 20px; border-right: 1px solid var(--border); font-size: 14px; }
+nav.toc .brand { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+nav.toc .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 18px; }
+nav.toc ol { list-style: none; padding: 0; margin: 0; }
+nav.toc li { margin: 1px 0; }
+nav.toc a { display: block; color: var(--muted); text-decoration: none; padding: 4px 8px; border-radius: 6px; }
+nav.toc a:hover { background: var(--surface-2); color: var(--text); }
+nav.toc ol ol a { padding-left: 22px; font-size: 13px; }
+.theme-btn { margin-top: 18px; font: inherit; font-size: 12.5px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+
+main { padding: 40px 48px 96px; min-width: 0; }
+header.hero h1 { font-size: 34px; line-height: 1.2; margin: 0 0 10px; letter-spacing: -.01em; }
+header.hero p.lede { font-size: 18px; color: var(--muted); max-width: 760px; margin: 0; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+
+section.chapter { margin-top: 64px; }
+section.chapter > h2 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.01em; }
+section.chapter > .kicker { color: var(--muted); margin: 0 0 22px; max-width: 800px; }
+h3 { font-size: 19px; margin: 34px 0 10px; }
+h4 { font-size: 15px; margin: 22px 0 8px; }
+p, li { max-width: 860px; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; box-shadow: var(--shadow); }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 18px 0; max-width: 860px; }
+.note.warn { border-color: var(--js); background: var(--js-soft); }
+.note b:first-child { display: block; margin-bottom: 2px; }
+
+.tag { display: inline-block; font: 600 11px/1.6 var(--sans); letter-spacing: .03em; text-transform: uppercase; padding: 0 7px; border-radius: 4px; vertical-align: 2px; white-space: nowrap; }
+.tag.py { background: var(--py-soft); color: var(--py); }
+.tag.js { background: var(--js-soft); color: var(--js); }
+.tag.http { background: var(--http-soft); color: var(--http); }
+.tag.ext { background: var(--ext-soft); color: var(--ext); }
+
+.table-wrap { overflow-x: auto; margin: 12px 0 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+th { background: var(--surface-2); font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { white-space: nowrap; }
+td code { white-space: nowrap; }
+
+/* Architecture stack */
+.stack { display: grid; gap: 10px; }
+.layer { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.layer-label { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding-top: 14px; }
+.layer-label span { display: block; font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+.boxes { display: flex; flex-wrap: wrap; gap: 10px; }
+.box { flex: 1 1 150px; border-radius: 10px; padding: 10px 12px; border: 1px solid; font-size: 13.5px; line-height: 1.4; }
+.box b { display: block; font-family: var(--mono); font-size: 13px; margin-bottom: 2px; }
+.box.py { background: var(--py-soft); border-color: color-mix(in srgb, var(--py) 35%, transparent); }
+.box.js { background: var(--js-soft); border-color: color-mix(in srgb, var(--js) 35%, transparent); }
+.box.http { background: var(--http-soft); border-color: color-mix(in srgb, var(--http) 35%, transparent); }
+.box.ext { background: var(--ext-soft); border-color: var(--border); }
+.arrow-row { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; }
+.arrow-row div:last-child { color: var(--muted); font-size: 13px; padding-left: 12px; border-left: 2px dashed var(--border); margin-left: 24px; }
+
+/* Dashboard anatomy mock */
+.mock { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface-2); font-size: 12.5px; }
+.mock-top { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.mock-body { display: grid; grid-template-columns: 1.1fr 2.2fr 1.5fr; gap: 10px; padding: 10px; min-height: 360px; }
+.mock-col { display: grid; gap: 8px; align-content: start; }
+.mock-map { position: relative; border-radius: 8px; background:
+  radial-gradient(circle at 30% 40%, color-mix(in srgb, var(--accent) 30%, transparent) 0 8%, transparent 9%),
+  radial-gradient(circle at 62% 58%, color-mix(in srgb, var(--js) 30%, transparent) 0 10%, transparent 11%),
+  linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+  border: 1px solid var(--border); padding: 10px; display: grid; grid-template-rows: auto 1fr auto; gap: 8px; }
+.mock-map svg { width: 100%; height: 100%; min-height: 140px; }
+.region { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px 8px 34px; }
+.region .n { position: absolute; left: 8px; top: 8px; width: 19px; height: 19px; border-radius: 50%; background: var(--accent); color: var(--surface); font-weight: 700; font-size: 11px; display: grid; place-items: center; }
+.region b { display: block; font-size: 12.5px; }
+.region span { color: var(--muted); }
+.mock-floats { display: flex; gap: 8px; flex-wrap: wrap; }
+.mock-floats .region { flex: 1 1 140px; }
+
+/* Lifecycle steps */
+ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 14px 0; }
+ol.steps > li { counter-increment: step; position: relative; padding: 0 0 16px 44px; max-width: 900px; }
+ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); color: var(--accent); font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+ol.steps > li:not(:last-child)::after { content: ""; position: absolute; left: 13px; top: 30px; bottom: 2px; width: 2px; background: var(--border); }
+
+.tree { font-family: var(--mono); font-size: 13.5px; line-height: 1.7; white-space: pre; overflow-x: auto; }
+.tree .c { color: var(--muted); }
+.module-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin: 44px 0 6px; }
+.module-head h3 { margin: 0; font-family: var(--mono); font-size: 20px; }
+.module-head .loc { color: var(--muted); font-size: 13px; }
+.feeds { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.feeds span { font-size: 12.5px; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+
+footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13.5px; }
+
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; }
+  nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 20px 16px; }
+  nav.toc ol ol { display: none; }
+  main { padding: 28px 16px 64px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .mock-body { grid-template-columns: 1fr; }
+  .layer, .arrow-row { grid-template-columns: 1fr; gap: 6px; }
+  .layer-label { padding-top: 0; }
+  .arrow-row div:first-child { display: none; }
+  header.hero h1 { font-size: 27px; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="brand">OpenGeoStreams</div>
+  <div class="sub">Library structure guide · v2.0.0</div>
+  <ol>
+    <li><a href="#overview">1. The big picture</a></li>
+    <li><a href="#layout">2. Package layout</a></li>
+    <li><a href="#anatomy">3. Dashboard anatomy</a></li>
+    <li><a href="#modules">4. Module by module</a>
+      <ol>
+        <li><a href="#m-init">__init__.py</a></li>
+        <li><a href="#m-pipeline">pipeline.py</a></li>
+        <li><a href="#m-dataset">dataset.py</a></li>
+        <li><a href="#m-network">network.py</a></li>
+        <li><a href="#m-plots">plots.py</a></li>
+        <li><a href="#m-elevation">elevation.py</a></li>
+        <li><a href="#m-server">server.py</a></li>
+        <li><a href="#m-frontend">dashboard_assets/</a></li>
+        <li><a href="#m-ref">reference_data/</a></li>
+      </ol>
+    </li>
+    <li><a href="#endpoints">5. HTTP endpoint reference</a></li>
+    <li><a href="#flows">6. Request walkthroughs</a></li>
+    <li><a href="#caching">7. Caching and threads</a></li>
+    <li><a href="#python">8. Using it from Python</a></li>
+    <li><a href="#where">9. Where to change what</a></li>
+  </ol>
+  <button class="theme-btn" type="button" id="theme-btn">Toggle light / dark</button>
+</nav>
+
+<main>
+<header class="hero">
+  <h1>How OpenGeoStreams is built</h1>
+  <p class="lede">A guided tour of the <code>opengeostreams</code> package: what each module does, which functions it contains, and which part of the water-quality dashboard each one produces.</p>
+  <div class="meta-row">
+    <span class="pill"><span class="tag py">Python</span> library &amp; server</span>
+    <span class="pill"><span class="tag js">JS</span> browser dashboard</span>
+    <span class="pill"><span class="tag http">HTTP</span> endpoints</span>
+    <span class="pill"><span class="tag ext">External</span> services &amp; files</span>
+  </div>
+</header>
+
+<!-- ================================================================ -->
+<section class="chapter" id="overview">
+  <h2>1. The big picture</h2>
+  <p class="kicker">OpenGeoStreams is a Python library that happens to ship with a dashboard. Every chart, network match and interpolation surface is computed in Python. The browser only draws results and runs a few light client-side rules.</p>
+
+  <p>You can use it in two ways, and both go through the same code:</p>
+  <div class="grid-2">
+    <div class="card">
+      <h4 style="margin-top:0">As a library (notebooks, scripts)</h4>
+      <pre><code>import opengeostreams as ogs
+ds = ogs.load_csv("river.csv", rows="all")
+ds.plot_trend(parameter="BOD")      # Plotly figure
+ds.channel_network()                # drain/river matching
+ds.plot_map("map.html")             # Folium map</code></pre>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0">As a dashboard (browser)</h4>
+      <pre><code>ds.dashboard()                      # from Python, or
+python -m opengeostreams.server     # standalone
+# → http://127.0.0.1:4173</code></pre>
+      <p style="margin:8px 0 0;font-size:14px;color:var(--muted)">The server calls the <em>same</em> <code>RiverDataset</code> methods and sends their output to the browser as JSON.</p>
+    </div>
+  </div>
+
+  <h3>The layers</h3>
+  <p>Read this top to bottom as "who calls whom". Each layer only talks to the layer directly below it.</p>
+  <div class="card">
+    <div class="stack">
+      <div class="layer">
+        <div class="layer-label">Browser<span>draws &amp; interacts</span></div>
+        <div class="boxes">
+          <div class="box js"><b>index.html</b>Page skeleton, upload / combine / elevation handlers</div>
+          <div class="box js"><b>ui.js</b>Panels, drawer, theme, station &amp; layer lists</div>
+          <div class="box js"><b>app.js</b>State, Leaflet map, chart rendering, screening rules</div>
+          <div class="box ext"><b>Plotly.js · Leaflet</b>Rendering libraries</div>
+        </div>
+      </div>
+      <div class="arrow-row"><div></div><div>fetch() → JSON: <code>/api/figure</code>, <code>/api/network</code>, <code>/api/interpolation</code>, <code>/upload-csv</code> …</div></div>
+      <div class="layer">
+        <div class="layer-label">HTTP<span>routing &amp; caching</span></div>
+        <div class="boxes">
+          <div class="box http"><b>server.py</b><code>DashboardHandler</code> on a stdlib <code>ThreadingHTTPServer</code>. Holds the imported datasets in memory, caches figures, parses uploads.</div>
+        </div>
+      </div>
+      <div class="arrow-row"><div></div><div>calls methods on the active <code>RiverDataset</code></div></div>
+      <div class="layer">
+        <div class="layer-label">Public API<span>one object per file</span></div>
+        <div class="boxes">
+          <div class="box py"><b>dataset.py</b><code>RiverDataset</code>, <code>load_csv</code>, <code>from_dataframe</code>, <code>concat</code>. A thin facade that delegates to the engines below.</div>
+        </div>
+      </div>
+      <div class="arrow-row"><div></div><div>delegates to</div></div>
+      <div class="layer">
+        <div class="layer-label">Engines<span>the real work</span></div>
+        <div class="boxes">
+          <div class="box py"><b>pipeline.py</b>Cleaning, dates, station merging, dashboard payload, kriging</div>
+          <div class="box py"><b>network.py</b>Drain/river matching, upstream → downstream order (geopandas)</div>
+          <div class="box py"><b>plots.py</b>Plotly figures and the Folium map</div>
+          <div class="box py"><b>elevation.py</b>Station elevation from Google Earth Engine</div>
+        </div>
+      </div>
+      <div class="arrow-row"><div></div><div>reads</div></div>
+      <div class="layer">
+        <div class="layer-label">Data<span>inputs</span></div>
+        <div class="boxes">
+          <div class="box ext"><b>Your CSV / Excel</b>Measurements</div>
+          <div class="box ext"><b>reference_data/</b>India-WRIS channel shapefile, alias list</div>
+          <div class="box ext"><b>Open-Meteo</b>Precipitation archive, terrain elevation</div>
+          <div class="box ext"><b>Earth Engine</b>Copernicus DEM (optional)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note"><b>Key idea</b>The server does not render images. Python builds each chart as a <em>Plotly figure specification</em> (JSON describing traces and layout). The browser receives that JSON and calls <code>Plotly.react()</code> to draw it. The map is different: it is built in the browser with Leaflet from raw data (stations, GeoJSON channel lines, interpolation grid values).</div>
+</section>
+
+<!-- ================================================================ -->
+<section class="chapter" id="layout">
+  <h2>2. Package layout</h2>
+  <p class="kicker">Everything lives in the inner <code>opengeostreams/</code> folder. Line counts give a sense of where the complexity sits.</p>
+  <div class="card tree"><span class="c">opengeostreams/                  (project folder, contains pyproject.toml)</span>
+└── opengeostreams/              <span class="c">the importable package</span>
+    ├── __init__.py              <span class="c">    6 lines  public API re-exports</span>
+    ├── pipeline.py              <span class="c">  759 lines  cleaning, dashboard payload, kriging</span>
+    ├── dataset.py               <span class="c">  383 lines  RiverDataset: the user-facing object</span>
+    ├── network.py               <span class="c">  850 lines  drain/river matching and ordering</span>
+    ├── plots.py                 <span class="c">  542 lines  Plotly figures + Folium map</span>
+    ├── elevation.py             <span class="c">   62 lines  Earth Engine elevation connector</span>
+    ├── server.py                <span class="c">  604 lines  HTTP server and API endpoints</span>
+    ├── dashboard_assets/        <span class="c">static frontend served by server.py</span>
+    │   ├── index.html           <span class="c">  716 lines  markup + inline import/elevation scripts</span>
+    │   ├── ui.js                <span class="c">  567 lines  dashboard shell (panels, lists, theme)</span>
+    │   ├── app.js               <span class="c">3,121 lines  map, charts, filters, screening</span>
+    │   └── styles.css           <span class="c">3,036 lines  styling, light/dark theme</span>
+    └── reference_data/
+        ├── indiawris_punjab_channels_2024.shp (+ .dbf .shx .prj .cpg)
+        └── water_body_aliases.csv</div>
+
+  <h3>Dependencies</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Group</th><th>Packages</th><th>Needed for</th></tr>
+    <tr><td>core</td><td><code>pandas</code>, <code>numpy</code>, <code>plotly</code>, <code>folium</code>, <code>openpyxl</code>, <code>xlrd</code>, <code>pillow</code>, <code>certifi</code></td><td>Loading, analysis, all charts, Excel uploads, HTTPS to Open-Meteo</td></tr>
+    <tr><td><code>[network]</code></td><td><code>geopandas</code>, <code>pyarrow</code></td><td>Drain/river matching, stream view by channel, river-following interpolation</td></tr>
+    <tr><td><code>[earthengine]</code></td><td><code>earthengine-api</code></td><td>The "Fetch elevations" panel</td></tr>
+    <tr><td><code>[images]</code></td><td><code>kaleido</code>, <code>playwright</code></td><td>Saving figures and maps as PNG</td></tr>
+  </table></div>
+  <p>Heavy optional imports (geopandas, ee, folium, playwright) happen <em>inside</em> functions, so importing the package stays fast and optional features fail with a clear install hint only when used.</p>
+</section>
+
+<!-- ================================================================ -->
+<section class="chapter" id="anatomy">
+  <h2>3. Dashboard anatomy</h2>
+  <p class="kicker">A schematic of the dashboard screen. Each numbered region is listed below with the code that builds it, so you can go from "that thing on screen" to the function responsible.</p>
+
+  <div class="mock" role="img" aria-label="Schematic of the dashboard layout with numbered regions">
+    <div class="mock-top">
+      <div class="region" style="flex:1"><span class="n">1</span><b>Top bar</b><span>Active CSV · parameter chip · mapped count · theme · Analysis toggle</span></div>
+    </div>
+    <div class="mock-body">
+      <div class="mock-col">
+        <div class="region"><span class="n">2</span><b>Data layers</b><span>Imported files, import, combine, download, clear</span></div>
+        <div class="region"><span class="n">3</span><b>Parameters</b><span>Parameter buttons + filter</span></div>
+        <div class="region"><span class="n">4</span><b>Stations</b><span>Searchable station list</span></div>
+        <div class="region"><span class="n">5</span><b>Station elevation</b><span>Earth Engine lookup</span></div>
+      </div>
+      <div class="mock-map">
+        <div class="mock-floats">
+          <div class="region"><span class="n">6</span><b>Use-case screening</b><span>Drinking / irrigation / aquatic / bathing</span></div>
+          <div class="region"><span class="n">7</span><b>Parameter scale</b><span>Safe band vs current value</span></div>
+        </div>
+        <div class="region" style="background:transparent;border-style:dashed"><span class="n">8</span><b>Leaflet map</b><span>Basemap, station markers, drain/river lines, interpolation raster</span>
+          <svg viewBox="0 0 300 120" aria-hidden="true">
+            <path d="M10 95 C 70 70, 110 90, 160 60 S 250 30, 290 20" fill="none" stroke="var(--py)" stroke-width="3"/>
+            <path d="M120 110 C 135 90, 150 75, 160 60" fill="none" stroke="var(--py)" stroke-width="2" opacity=".7"/>
+            <circle cx="60" cy="80" r="6" fill="var(--accent)"/><circle cx="160" cy="60" r="6" fill="var(--js)"/><circle cx="240" cy="32" r="6" fill="var(--accent)"/>
+          </svg>
+        </div>
+        <div class="mock-floats">
+          <div class="region"><span class="n">9</span><b>Layers &amp; legend</b><span>Stations / interpolation toggles</span></div>
+          <div class="region"><span class="n">10</span><b>Period</b><span>Annual / month · year</span></div>
+        </div>
+      </div>
+      <div class="mock-col">
+        <div class="region"><span class="n">11</span><b>Analysis drawer</b><span>Station title; tabs Trend · Distribution · Stream</span></div>
+        <div class="region"><span class="n">12</span><b>Trend chart</b><span>Parameter line + precipitation bars</span></div>
+        <div class="region"><span class="n">13</span><b>Distribution</b><span>Box plot by year / month</span></div>
+        <div class="region"><span class="n">14</span><b>Stream visualization</b><span>Station × year heatmap, drain selector, channel summary</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Region → code → data source</h3>
+  <div class="table-wrap"><table>
+    <tr><th>#</th><th>Region</th><th>Built by (frontend)</th><th>Data comes from</th><th>Python function</th></tr>
+    <tr><td>1</td><td>Top bar</td><td><code>ui.js</code> <code>renderContext()</code>, <code>syncThemeButton()</code></td><td><code>/dashboard-data.js</code></td><td><code>RiverDataset.summary</code></td></tr>
+    <tr><td>2</td><td>Data layers</td><td><code>ui.js</code> <code>renderLayerList()</code>, <code>renderCombinePanel()</code>; upload form in <code>index.html</code></td><td><code>/datasets</code>, <code>/upload-csv</code>, <code>/combine-csv</code>, <code>/select-csv</code>, <code>/reset-data</code>, <code>/api/download</code></td><td><code>process_uploaded_csv</code>, <code>dataset.concat</code>, <code>to_csv</code></td></tr>
+    <tr><td>2</td><td>Import summary (rows, merged labels, coordinate conflicts)</td><td>inline script in <code>index.html</code></td><td>upload response <code>summary</code></td><td><code>pipeline.merge_duplicate_locations</code>, <code>RiverDataset.coordinate_conflicts</code></td></tr>
+    <tr><td>3</td><td>Parameters</td><td><code>app.js</code> <code>renderParameterTabs()</code>; <code>ui.js</code> <code>applyParameterFilter()</code></td><td><code>records</code> in <code>/dashboard-data.js</code></td><td><code>pipeline.build_dashboard_data</code></td></tr>
+    <tr><td>4</td><td>Stations list</td><td><code>ui.js</code> <code>renderStations()</code> via <code>window.OGS.getStations()</code></td><td>same</td><td>same</td></tr>
+    <tr><td>5</td><td>Station elevation</td><td>inline script in <code>index.html</code></td><td><code>/api/elevations</code></td><td><code>elevation.fetch_elevations</code></td></tr>
+    <tr><td>6</td><td>Use-case screening</td><td><code>app.js</code> <code>renderUseCaseTabs()</code>, <code>evaluateLocationSuitability()</code>, <code>fitForHumanConsumption()</code> …</td><td>records (client-side rules)</td><td>none (pure JS)</td></tr>
+    <tr><td>7</td><td>Parameter scale</td><td><code>app.js</code> <code>refreshParameterScale()</code></td><td>records + thresholds in <code>app.js</code></td><td>none (pure JS)</td></tr>
+    <tr><td>8</td><td>Station markers</td><td><code>app.js</code> <code>L.circleMarker</code>, <code>refreshMarkerStyles()</code>, <code>updateMapLabels()</code></td><td><code>locations</code> in <code>/dashboard-data.js</code></td><td><code>pipeline.build_dashboard_data</code></td></tr>
+    <tr><td>8</td><td>Drain / river lines</td><td><code>app.js</code> <code>loadChannelNetwork()</code>, <code>drawChannelLayers()</code></td><td><code>/api/network</code></td><td><code>network.build_channel_network</code></td></tr>
+    <tr><td>8</td><td>Interpolation raster</td><td><code>app.js</code> <code>loadInterpolationData()</code>, <code>refreshInterpolationOverlay()</code>, <code>buildInterpolationImage()</code></td><td><code>/api/interpolation</code></td><td><code>pipeline.build_interpolation_data</code> (via <code>RiverDataset.interpolate</code>)</td></tr>
+    <tr><td>9</td><td>Layers &amp; legend</td><td><code>app.js</code> overlay toggles, <code>ui.js</code> <code>setLayersOpen()</code></td><td>(state only)</td><td>none</td></tr>
+    <tr><td>10</td><td>Period / year filter</td><td><code>app.js</code> <code>renderPeriodFilter()</code>, <code>renderYearFilter()</code></td><td>records</td><td><code>pipeline.parse_date_bounds</code> (date precision)</td></tr>
+    <tr><td>12</td><td>Trend chart</td><td><code>app.js</code> <code>renderLibraryFigure("trend")</code></td><td><code>/api/figure?kind=trend</code></td><td><code>plots.trend_figure</code></td></tr>
+    <tr><td>13</td><td>Distribution</td><td><code>app.js</code> <code>renderLibraryFigure("distribution")</code>, <code>installBoxplotHover()</code></td><td><code>/api/figure?kind=distribution</code></td><td><code>plots.distribution_figure</code></td></tr>
+    <tr><td>14</td><td>Stream heatmap</td><td><code>app.js</code> <code>renderLibraryFigure("stream")</code>, <code>buildStreamPages()</code></td><td><code>/api/figure?kind=stream</code></td><td><code>plots.stream_figure</code></td></tr>
+    <tr><td>14</td><td>Channel summary &amp; drain selector</td><td><code>app.js</code> <code>renderChannelSummary()</code>, <code>selectStreamChannel()</code></td><td><code>/api/network</code></td><td><code>network.build_channel_network</code></td></tr>
+  </table></div>
+  <div class="note warn"><b>Python-side vs browser-side</b>Screening (6) and the parameter scale (7) are the only analytical features that live entirely in JavaScript. Their rules and thresholds sit in <code>app.js</code>, not in the Python library, so calling <code>RiverDataset</code> from a notebook will not give you suitability results.</div>
+</section>
+
+<!-- ================================================================ -->
+<section class="chapter" id="modules">
+  <h2>4. Module by module</h2>
+  <p class="kicker">Modules are listed in dependency order: <code>pipeline</code> depends on nothing inside the package, and each later module builds on the earlier ones.</p>
+
+  <!-- __init__ -->
+  <div class="module-head" id="m-init"><h3>__init__.py</h3><span class="tag py">Python</span><span class="loc">public API</span></div>
+  <p>Re-exports the four names a user needs, and sets <code>__version__ = "2.0.0"</code>:</p>
+  <pre><code>from .dataset import MAX_PAGE_SIZE, RiverDataset, concat, from_dataframe, load_csv</code></pre>
+  <p><code>import opengeostreams as ogs</code> is the entry point. The other modules are internal but importable (e.g. <code>from opengeostreams import network</code>).</p>
+
+  <!-- pipeline -->
+  <div class="module-head" id="m-pipeline"><h3>pipeline.py</h3><span class="tag py">Python</span><span class="loc">759 lines · data-processing core</span></div>
+  <p>The foundation. It turns messy source rows into a clean nine-column schema, builds the JSON payload the dashboard boots from, and implements ordinary kriging for the interpolation surfaces. It depends only on numpy and the standard library.</p>
+  <div class="feeds"><span>Parameter list</span><span>Station markers</span><span>Period &amp; year filters</span><span>Interpolation raster</span><span>Import summary</span></div>
+
+  <h4>Constants you will meet elsewhere</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Name</th><th>Meaning</th></tr>
+    <tr><td><code>ROOT</code></td><td>Path to <code>dashboard_assets/</code>. The server serves static files from here.</td></tr>
+    <tr><td><code>OUTPUT_COLUMNS</code></td><td>The canonical schema: <code>SrNo, Parameter, Unit, Date, Value, Data Source, Location, Latitude, Longitude</code></td></tr>
+    <tr><td><code>WATER_BODY_COLUMNS</code></td><td>Optional column names that carry a drain/river name (<code>Water Body</code>, <code>Drain</code>, <code>River</code>, …). Kept as <code>Water Body</code>.</td></tr>
+    <tr><td><code>GRID_COLUMNS</code>, <code>GRID_ROWS</code></td><td>Interpolation grid size: 192 × 192 cells</td></tr>
+    <tr><td><code>MAX_DISTANCE_KM</code>, <code>MAX_NEIGHBORS</code></td><td>Kriging search radius (8 km) and neighbour count (8)</td></tr>
+  </table></div>
+
+  <h4>Cleaning and standardising</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>clean(value)</code></td><td>Collapses whitespace and strips BOMs and mojibake. Applied to every cell.</td></tr>
+    <tr><td><code>normalize_parameter(value)</code></td><td>Unifies aliases such as "T.Coliform" → "Total Coliform" while keeping "(Min)"/"(Max)" suffixes.</td></tr>
+    <tr><td><code>parse_month</code>, <code>normalize_date(row, filename)</code></td><td>Builds an exact date, or a bracketed range when only the year or month is known.</td></tr>
+    <tr><td><code>parse_date_bounds(value)</code></td><td>Returns <code>(start, end, precision)</code> where precision is <code>"day"</code>, <code>"month"</code> or <code>"year"</code>. Used by every chart and filter to handle mixed-precision dates.</td></tr>
+    <tr><td><code>standardize_rows(rows, filename)</code></td><td>Maps raw CSV rows onto <code>OUTPUT_COLUMNS</code> (plus <code>Water Body</code> when present) and drops empty rows.</td></tr>
+    <tr><td><code>merge_duplicate_locations(rows)</code></td><td>Gives one name to label variants of the same site (e.g. <code>"SOURCE BUDHA NALLAH 30.973"</code> and <code>"POINT SOURCE BUDHA NALLAH"</code>). Word-subset matching plus coordinate proximity; never merges U/S with D/S. Returns the merge list shown in the import summary.</td></tr>
+    <tr><td><code>validate_rows(rows)</code></td><td>Raises if <code>Parameter, Value, Location, Latitude, Longitude</code> are all empty.</td></tr>
+    <tr><td><code>count_missing_values(rows)</code></td><td>Counts empty or "NA"/"null"-style cells for the "missing values" figure.</td></tr>
+    <tr><td><code>number(value)</code></td><td>Parses numbers, including <code>"2.4x10^3"</code> notation, to <code>float</code> or <code>None</code>.</td></tr>
+    <tr><td><code>parameter_family(parameter)</code></td><td>Strips (Min)/(Max) so ranges plot as one parameter family.</td></tr>
+    <tr><td><code>location_group(location)</code></td><td>Normalises a station name for grouping.</td></tr>
+  </table></div>
+
+  <h4>The dashboard payload</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Function</th><th>What it does</th><th>Dashboard part</th></tr>
+    <tr><td><code>build_dashboard_data(rows, …)</code></td><td>Builds the object the frontend boots from: <code>summary</code>, <code>locations[]</code> (one per station, with coordinates), <code>records[]</code> (one per measurement, with <code>dateLabel</code>, <code>monthIndex</code>, <code>numericValue</code>, <code>hasCoordinates</code> …) and <code>analytics.boxplots</code>.</td><td>Markers, parameter &amp; station lists, filters, screening, labels</td></tr>
+    <tr><td><code>build_boxplot_statistics(records)</code></td><td>Five-number summaries per station/parameter/year and month.</td><td>Stored in the payload; the current UI uses the figure from <code>plots.distribution_figure</code> instead</td></tr>
+    <tr><td><code>empty_dashboard_data()</code></td><td>A valid empty payload for the "Drop a file to begin" state.</td><td>Empty state</td></tr>
+    <tr><td><code>read_csv_rows</code>, <code>consolidate_datasets</code>, <code>build_from_csv</code>, <code>write_dashboard_data</code></td><td>Offline batch tools: combine the <code>Datasets/</code> folder into <code>consolidated_dataset.csv</code> and write a static <code>dashboard-data.js</code>. Run with <code>python -m opengeostreams.pipeline</code>.</td><td>Not used by the live server</td></tr>
+  </table></div>
+
+  <h4>Interpolation (ordinary kriging)</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>build_interpolation_data(dashboard_data, …, river_mask=None)</code></td><td><strong>Entry point.</strong> Produces <code>{"method", "extent", "surfaces": {"allYears": [...], "yearly": [...]}}</code>. This is the JSON returned by <code>/api/interpolation</code>.</td></tr>
+    <tr><td><code>collect_interpolation_surfaces(records, extent, mask, yearly)</code></td><td>Groups records by (period, parameter family), averages each station, and builds one surface per group.</td></tr>
+    <tr><td><code>build_interpolation_grid(points, extent, mask)</code></td><td>Fills the 192×192 grid. Only cells inside the river mask are estimated, and station cells are pinned to observed values.</td></tr>
+    <tr><td><code>interpolation_model(points)</code></td><td>Fits a Gaussian variogram (nugget, sill, range) from the sample variance and station spacing.</td></tr>
+    <tr><td><code>_krige_targets(…)</code></td><td>Vectorised kriging over many cells at once (fast path).</td></tr>
+    <tr><td><code>interpolate_ordinary_kriging(points, model, target)</code>, <code>covariance</code></td><td>Single-cell reference implementation.</td></tr>
+    <tr><td><code>interpolation_extent(records, mask)</code></td><td>Station bounding box plus 8% padding (or the mask's extent).</td></tr>
+    <tr><td><code>distance_km</code>, <code>_haversine_km</code></td><td>Great-circle distances (scalar and matrix).</td></tr>
+    <tr><td><code>load_river_mask(path)</code></td><td>Loads a precomputed JSON mask (optional alternative to the network corridor).</td></tr>
+  </table></div>
+
+  <!-- dataset -->
+  <div class="module-head" id="m-dataset"><h3>dataset.py</h3><span class="tag py">Python</span><span class="loc">383 lines · public facade</span></div>
+  <p>Defines <code>RiverDataset</code>, the one object users (and the server) interact with. It wraps a pandas <code>DataFrame</code> in <code>.data</code> and delegates heavy work to the other modules. Imports of <code>network</code>, <code>plots</code>, <code>elevation</code> and <code>server</code> happen inside methods, so the class loads without those dependencies.</p>
+  <div class="feeds"><span>Everything, indirectly</span></div>
+
+  <h4>Construction</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Function / method</th><th>What it does</th></tr>
+    <tr><td><code>load_csv(path, rows=400, merge_stations=True)</code></td><td>Reads the first <code>rows</code> records (or <code>"all"</code>) and returns a <code>RiverDataset</code>.</td></tr>
+    <tr><td><code>from_dataframe(frame, name=…)</code></td><td>Builds a dataset from any pandas DataFrame in the CSV schema. Used internally by uploads (after Excel/JSON conversion) and by <code>concat</code>.</td></tr>
+    <tr><td><code>concat(datasets, name=…, station=None)</code></td><td>Stacks datasets or DataFrames. <code>station=</code> forces every row onto one station name. Behind the <strong>Combine files</strong> panel.</td></tr>
+    <tr><td><code>RiverDataset._set_data(raw, source_name)</code></td><td>The internal pipeline: <code>standardize_rows</code> → <code>merge_duplicate_locations</code> → <code>validate_rows</code> → <code>build_dashboard_data</code> → DataFrame with <code>NumericValue</code>. Resets the interpolation and network caches.</td></tr>
+  </table></div>
+
+  <h4>Inspection</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Member</th><th>What it gives you</th><th>Dashboard part</th></tr>
+    <tr><td><code>.data</code></td><td>The processed DataFrame</td><td>Filtered copies feed every chart</td></tr>
+    <tr><td><code>.summary</code></td><td>Row/column/missing counts, station and parameter counts, merged labels, coordinate conflicts</td><td>Top bar, import summary</td></tr>
+    <tr><td><code>coordinate_conflicts(min_spread_m=500)</code></td><td>Stations whose rows disagree on position by more than 500 m</td><td>"Coordinate conflicts" warning after import</td></tr>
+    <tr><td><code>head()</code>, <code>describe(parameter)</code>, <code>len()</code>, <code>loaded_rows</code>, <code>remaining_rows</code>, <code>has_more</code></td><td>pandas-style exploration</td><td>Library use only</td></tr>
+    <tr><td><code>to_csv(path=None)</code></td><td>Exports the standard schema; returns text when <code>path</code> is <code>None</code></td><td>Download button (<code>/api/download</code>)</td></tr>
+  </table></div>
+
+  <h4>Analysis and plotting (each is a one-line delegation)</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>Delegates to</th><th>Dashboard part</th></tr>
+    <tr><td><code>channel_network()</code></td><td><code>network.build_channel_network</code> (cached in <code>_channel_network</code>)</td><td>Drain lines, stream grouping, channel summary</td></tr>
+    <tr><td><code>assign_channels()</code></td><td><code>network.channel_table</code></td><td>Library use: a flat table</td></tr>
+    <tr><td><code>interpolate()</code></td><td><code>pipeline.build_interpolation_data</code>, with a river mask from <code>network.river_corridor_mask</code> (cached in <code>_interpolation</code>)</td><td>Interpolation raster</td></tr>
+    <tr><td><code>plot_trend()</code></td><td><code>plots.trend_figure</code></td><td>Trend chart</td></tr>
+    <tr><td><code>plot_distribution()</code></td><td><code>plots.distribution_figure</code></td><td>Distribution box plot</td></tr>
+    <tr><td><code>plot_stream()</code></td><td><code>plots.stream_figure</code></td><td>Stream heatmap</td></tr>
+    <tr><td><code>plot()</code></td><td><code>plots.interpolation_figure</code></td><td>Plotly heatmap of a surface (library use; the dashboard draws the raster itself)</td></tr>
+    <tr><td><code>plot_map()</code></td><td><code>plots.map_figure</code>, <code>plots.save_map_png</code></td><td>Standalone Folium map (library use)</td></tr>
+    <tr><td><code>fetch_elevations()</code></td><td><code>elevation.fetch_elevations</code></td><td>Station elevation panel</td></tr>
+    <tr><td><code>dashboard(host, port)</code></td><td><code>server.create_server(dataset=self)</code> on a background thread</td><td>Launches the whole dashboard preloaded with this dataset</td></tr>
+  </table></div>
+  <p>Every <code>plot_*</code> method accepts <code>save_path</code>. <code>_output()</code> writes <code>.html</code> with Plotly.js inlined, or any image format through kaleido.</p>
+
+  <!-- network -->
+  <div class="module-head" id="m-network"><h3>network.py</h3><span class="tag py">Python</span><span class="loc">850 lines · drain/river matching</span></div>
+  <p>Answers two questions: <em>which drain or river is each station on?</em> and <em>in what order do they sit, upstream → downstream?</em> It uses geopandas and shapely on the India-WRIS channel network. The result is a geometric approximation, not a hydrological model.</p>
+  <div class="feeds"><span>Drain/river lines on map</span><span>Stream: drain selector &amp; grouping</span><span>Channel summary</span><span>River-following interpolation</span></div>
+
+  <h4>The algorithm (as documented in the module)</h4>
+  <ol class="steps">
+    <li><strong>Assign a channel to each station</strong>, in priority order: (a) a name column in the file (<code>Water Body</code>, <code>Drain</code> …); (b) a water-body name parsed from the station label ("HUDIARA DRAIN AT …"), fuzzy-matched to a nearby line; (c) the nearest network line within <code>max_distance_km</code> (default 2 km). Stations with none of these are reported as <em>unassigned</em>.</li>
+    <li><strong>Build channels.</strong> Connected lines with the same name are joined into one channel. Endpoints within 30 m are treated as one graph node.</li>
+    <li><strong>Find the outlet.</strong> This is the lowest end by terrain elevation (Open-Meteo), preferring an end that joins a differently named line (a confluence). Offline, it falls back to confluence detection and line direction. The method used is reported for each channel.</li>
+    <li><strong>Order stations</strong> by distance along the channel to the outlet (Dijkstra over the line graph). The farthest station is the most upstream. U/S / D/S labels break near-ties.</li>
+  </ol>
+
+  <h4>Functions</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Function</th><th>What it does</th></tr>
+    <tr><td><code>build_channel_network(frame, max_distance_km=2.0, …)</code></td><td><strong>Entry point.</strong> Returns <code>{"channels": [...], "unassigned": [...], "noCoordinates": [...], "source", "method"}</code>. Each channel has <code>id, name, networkName, kind, lengthKm, outletMethod, joins, aliases, stations[]</code> (ordered, with <code>distanceToOutletKm</code>, <code>snapDistanceM</code>, <code>assignedBy</code>) and a simplified GeoJSON <code>geometry</code>. This is what <code>/api/network</code> returns.</td></tr>
+    <tr><td><code>station_table(frame)</code></td><td>One row per station with a representative coordinate, water-body column and parsed name.</td></tr>
+    <tr><td><code>parse_water_body(label)</code></td><td>Extracts "Hudiara Drain" from "HUDIARA DRAIN AT VILLAGE …".</td></tr>
+    <tr><td><code>load_aliases()</code>, <code>canonical_name(name)</code></td><td>Map local names to one preferred name (e.g. "Attawa Choa" → "N-Choe") using <code>water_body_aliases.csv</code>.</td></tr>
+    <tr><td><code>name_similarity(a, b)</code></td><td>Transliteration-tolerant name matching (Budha/Budda, Sutlej/Satluj). Threshold 0.8.</td></tr>
+    <tr><td><code>find_network_path()</code>, <code>load_network(bounds)</code></td><td>Locate and read the network lines within the stations' bounding box. Order of lookup: <code>$OPENGEOSTREAMS_NETWORK</code>, <code>data/indiawris/WRIS_Rivers_2024.parquet</code>, then the bundled Punjab shapefile.</td></tr>
+    <tr><td><code>fetch_point_elevations(points)</code></td><td>Open-Meteo terrain elevation for channel ends. Returns <code>{}</code> offline or when <code>$OPENGEOSTREAMS_OFFLINE</code> is set.</td></tr>
+    <tr><td><code>_Nodes</code>, <code>_dijkstra</code></td><td>Endpoint snapping into a graph and shortest-path distances.</td></tr>
+    <tr><td><code>river_corridor_mask(network_result, extent, stations)</code></td><td>Rasterises matched channels onto the 192×192 grid, so kriging follows rivers instead of spreading over dry land.</td></tr>
+    <tr><td><code>_attach_downstream_references</code>, <code>_apply_label_hints</code></td><td>Put a "D/S of &lt;drain&gt;" river station at the end of that drain; order U/S before D/S within 2 km.</td></tr>
+    <tr><td><code>channel_table(result)</code></td><td>Flattens the result into one DataFrame row per station.</td></tr>
+  </table></div>
+
+  <!-- plots -->
+  <div class="module-head" id="m-plots"><h3>plots.py</h3><span class="tag py">Python</span><span class="loc">542 lines · figure builders</span></div>
+  <p>Every chart in the dashboard's analysis drawer is built here as a <code>plotly.graph_objects.Figure</code>. Each function takes a <code>RiverDataset</code> (usually a filtered copy made by the server) and returns a figure. The server converts it with <code>figure.to_json()</code>.</p>
+  <div class="feeds"><span>Trend chart</span><span>Distribution box plot</span><span>Stream heatmap</span></div>
+
+  <div class="table-wrap"><table>
+    <tr><th>Function</th><th>Figure it builds</th><th>Dashboard part</th></tr>
+    <tr><td><code>trend_figure(ds, parameter, location)</code></td><td>One line+marker <code>Scatter</code> per station (and per Min/Max variant), plus precipitation <code>Bar</code>s on a second y-axis. Precipitation comes from rainfall parameters in the CSV if present, otherwise from Open-Meteo via <code>_weather_precipitation</code>. <code>layout.meta.precipitationStatus</code> tells the UI whether rain loaded.</td><td>Trend tab</td></tr>
+    <tr><td><code>distribution_figure(ds, parameter, grouping, location)</code></td><td>A <code>Box</code> trace with precomputed quartiles and 1.5×IQR whiskers per year or month, plus a <code>Scatter</code> of the individual samples. Stats are also placed in <code>layout.meta.boxplotStatistics</code> for the custom hover tooltip.</td><td>Distribution tab (Years / Months toggle)</td></tr>
+    <tr><td><code>stream_figure(ds, parameter, channel=None, group_by_channel=False)</code></td><td>Station × year <code>Heatmap</code> (mean value, <code>RdYlBu_r</code>) with a grey "No data" mask layer. With <code>channel</code> or <code>group_by_channel</code>, rows follow the upstream → downstream order from <code>network</code>, and <code>layout.meta.streamGroups</code> / <code>streamChannel</code> describe the grouping.</td><td>Stream tab</td></tr>
+    <tr><td><code>interpolation_figure(ds, parameter, year)</code></td><td>Plotly <code>Heatmap</code> of a kriging grid (Turbo colours) with station markers.</td><td>Library only (<code>/api/figure?kind=interpolation</code> exists but the map uses its own raster)</td></tr>
+    <tr><td><code>map_figure(ds, parameter)</code></td><td>A Folium (Leaflet) map with an RGBA <code>ImageOverlay</code> of the surface and station markers.</td><td>Library only: <code>plot_map()</code></td></tr>
+    <tr><td><code>save_map_png(map, path)</code></td><td>Renders the Folium HTML in headless Chrome (Playwright) and screenshots it.</td><td>Library only</td></tr>
+  </table></div>
+  <h4>Helpers</h4>
+  <p><code>_select</code> filters to numeric rows of one parameter/location. <code>_midpoint</code> places range dates at their centre on a time axis. <code>_style</code> applies the shared title, axes and size. <code>_channel_order</code> and <code>_stream_index</code> turn network output into row order. <code>_surface</code> and <code>_surface_arrays</code> pick a kriging surface and reshape it to 2-D. <code>_rgba_surface</code> colours it for Folium.</p>
+  <div class="note"><b>Styling split</b>Python sets the data, hover templates and base layout. The browser then re-themes each figure: <code>app.js</code> <code>chartLayout()</code> overrides colours, fonts, margins and heights from CSS variables, so charts follow light/dark mode without a new server request.</div>
+
+  <!-- elevation -->
+  <div class="module-head" id="m-elevation"><h3>elevation.py</h3><span class="tag py">Python</span><span class="loc">62 lines · optional connector</span></div>
+  <p>A single function, <code>fetch_elevations(frame, project=None)</code>. It samples the Copernicus GLO-30 DEM (<code>COPERNICUS/DEM/GLO30_2024_1</code>) at each unique station through Google Earth Engine, in batches of 500 points. It returns a DataFrame of <code>Location, Latitude, Longitude, elevation_m, status, source</code>.</p>
+  <p>It needs <code>pip install "opengeostreams[earthengine]"</code>, a one-time <code>ee.Authenticate()</code>, and the environment variable <code>OPENGEOSTREAMS_EE_PROJECT</code> set to a Cloud project ID. Otherwise it raises a <code>ValueError</code> with setup instructions, which the panel displays.</p>
+  <div class="feeds"><span>Station elevation panel</span></div>
+  <div class="note"><b>Two different elevation sources</b><code>elevation.py</code> (Earth Engine, opt-in) feeds the elevation panel. <code>network.fetch_point_elevations</code> (Open-Meteo, no account needed) is used only internally to decide which end of a channel is downstream.</div>
+
+  <!-- server -->
+  <div class="module-head" id="m-server"><h3>server.py</h3><span class="tag py">Python</span><span class="tag http">HTTP</span><span class="loc">604 lines · web server</span></div>
+  <p>A standard-library <code>ThreadingHTTPServer</code> (no Flask or FastAPI) with one handler class, <code>DashboardHandler</code>, that routes on the path with plain <code>if</code> statements. It keeps imported datasets in memory, turns library output into JSON, and serves the static frontend from <code>pipeline.ROOT</code>.</p>
+  <div class="feeds"><span>All endpoints</span><span>Upload &amp; combine</span><span>Figure cache</span></div>
+
+  <h4>Server state</h4>
+  <p><code>create_server()</code> attaches three attributes to the server object:</p>
+  <ul>
+    <li><code>server.datasets</code>: a dict mapping a random UUID to a <em>dataset entry</em></li>
+    <li><code>server.active_dataset</code>: the UUID currently shown</li>
+    <li><code>server.dataset_lock</code>: guards both of the above</li>
+  </ul>
+  <p>A dataset entry, created by <code>dataset_entry()</code>, holds the <code>RiverDataset</code>, its file name, an LRU <code>figures</code> cache, and one lock per expensive operation (one per chart kind, plus interpolation, elevation and network).</p>
+
+  <h4>Functions</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Function</th><th>Role</th></tr>
+    <tr><td><code>create_server(host, port, dataset=None)</code></td><td>Builds the server; optionally pre-loads one dataset (used by <code>RiverDataset.dashboard()</code>).</td></tr>
+    <tr><td><code>run_server()</code></td><td>Starts <code>serve_forever()</code>; used by <code>python -m opengeostreams.server</code>. Port from <code>$NCHOE_PORT</code>, default 4173.</td></tr>
+    <tr><td><code>build_figure(entry, query)</code></td><td>The heart of <code>/api/figure</code>. Checks the cache, copies the dataset, maps parameters to families, filters by location, year and month, calls the right <code>plot_*</code> method, and caches up to 128 results.</td></tr>
+    <tr><td><code>ensure_network(entry)</code>, <code>warm_network(entry)</code></td><td>Compute the channel network once per dataset. <code>warm_network</code> starts that work on a background thread right after upload.</td></tr>
+    <tr><td><code>ensure_interpolation(entry)</code></td><td>Builds (or waits for) the network first, so the surface can follow rivers, then runs <code>interpolate()</code> once.</td></tr>
+    <tr><td><code>extract_uploaded_csv</code></td><td>Parses the <code>multipart/form-data</code> upload body.</td></tr>
+    <tr><td><code>normalize_uploaded_table</code>, <code>convert_upload_to_csv</code></td><td>Accept Excel, JSON, TSV and "one station per row" wide tables, and reshape them to measurement rows.</td></tr>
+    <tr><td><code>process_uploaded_csv(filename, payload, rows)</code></td><td>Writes a temp file and calls <code>dataset.load_csv</code>.</td></tr>
+    <tr><td><code>fetch_weather_data</code>, <code>_fetch_weather_cached</code></td><td>Open-Meteo archive client, clipped to 1940 through yesterday and cached in 15-minute buckets. Called by <code>plots._weather_precipitation</code>.</td></tr>
+    <tr><td><code>plotly_javascript()</code></td><td>Serves Plotly.js from the installed Python <code>plotly</code> package, so no CDN is needed.</td></tr>
+    <tr><td><code>json_bytes</code>, <code>DashboardHandler.send_json</code></td><td>Serialise and gzip responses over 64 KB. Network and interpolation JSON are serialised once and reused.</td></tr>
+  </table></div>
+
+  <!-- frontend -->
+  <div class="module-head" id="m-frontend"><h3>dashboard_assets/</h3><span class="tag js">JavaScript</span><span class="loc">static frontend</span></div>
+  <p>No build step and no framework: plain scripts loaded in this order at the bottom of <code>index.html</code>:</p>
+  <pre><code>Leaflet (unpkg)  →  /plotly.min.js  →  /dashboard-data.js  →  ui.js  →  app.js  →  inline script</code></pre>
+  <p><code>/dashboard-data.js</code> is generated per request by the server. It assigns the active dataset's payload to <code>window.NCHOE_DASHBOARD_DATA</code>. When the user uploads or switches files, the page simply reloads (<code>location.replace('/?data=…')</code>) so the new payload loads.</p>
+
+  <div class="grid-3">
+    <div class="card">
+      <h4 style="margin-top:0"><code>index.html</code></h4>
+      <p style="font-size:14.5px">Markup for every panel, plus an inline script that handles the non-chart server calls:</p>
+      <ul style="font-size:14.5px;padding-left:18px">
+        <li>upload form → <code>/upload-csv</code></li>
+        <li>file switcher → <code>/datasets</code>, <code>/select-csv</code></li>
+        <li>"Clear all data" → <code>/reset-data</code></li>
+        <li>"Fetch elevations" → <code>/api/elevations</code></li>
+        <li>import summary: merged labels, coordinate conflicts</li>
+        <li>About dialog</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0"><code>ui.js</code></h4>
+      <p style="font-size:14.5px">The dashboard <em>shell</em>. It knows nothing about water quality. It reads state through <code>window.OGS</code> and listens for <code>ogs:ready</code>.</p>
+      <ul style="font-size:14.5px;padding-left:18px">
+        <li>open/close/resize panels and the drawer</li>
+        <li>theme toggle, toasts, basemap popover</li>
+        <li><code>renderLayerList()</code>, <code>renderCombinePanel()</code> → <code>/combine-csv</code></li>
+        <li><code>renderStations()</code>, <code>applyParameterFilter()</code></li>
+        <li><code>window.OGS_UI.viewPadding()</code> for map fitting</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0"><code>app.js</code></h4>
+      <p style="font-size:14.5px">The analysis engine of the page. One central <code>state</code> object (<code>selectedLocation</code>, <code>selectedParameter</code>, <code>selectedPeriod</code>, <code>selectedYear</code>, <code>selectedUseCase</code>, <code>boxplotGrouping</code>, <code>streamChannel</code>, <code>baseMap</code>). Every interaction updates it and redraws the affected panels.</p>
+      <p style="font-size:14.5px;margin-bottom:0">It exposes <code>window.OGS = {map, fitStations, selectLocation, getStations, getState, …}</code> for <code>ui.js</code>.</p>
+    </div>
+  </div>
+
+  <h4>app.js function groups</h4>
+  <div class="table-wrap"><table>
+    <tr><th>Group</th><th>Key functions</th><th>What they do</th></tr>
+    <tr><td>Selection controller</td><td><code>selectLocation()</code>, <code>refreshViewsForParameterChange()</code>, <code>refreshViewsForTimeFilterChange()</code></td><td>Main entry points. A station click, parameter click or filter change goes through these and fans out to every panel.</td></tr>
+    <tr><td>Library charts</td><td><code>renderLibraryFigure(kind, el, empty)</code>, <code>chartLayout()</code>, <code>chartTheme()</code></td><td>Build the <code>/api/figure</code> query from <code>state</code>, cancel stale requests with <code>AbortController</code>, then <code>Plotly.react()</code> with themed layout.</td></tr>
+    <tr><td>Chart hovers</td><td><code>installTrendHover()</code>, <code>installBoxplotHover()</code></td><td>Custom HTML tooltips replacing Plotly's default hover.</td></tr>
+    <tr><td>Stream paging</td><td><code>buildStreamPages()</code>, <code>streamGroupDecorations()</code></td><td>Split tall heatmaps into pages without splitting a drain; draw group separators.</td></tr>
+    <tr><td>Map</td><td><code>L.map(…)</code>, <code>setBaseMap()</code>, <code>fitStations()</code>, <code>refreshMarkerStyles()</code>, <code>updateMapLabels()</code>, <code>buildLocationPopup()</code></td><td>Basemaps (OSM, minimal, satellite), station markers coloured by screening result, labels showing latest value, popups.</td></tr>
+    <tr><td>Drain network</td><td><code>loadChannelNetwork()</code>, <code>drawChannelLayers()</code>, <code>styleChannelLayers()</code>, <code>renderChannelSummary()</code>, <code>selectStreamChannel()</code>, <code>stepStreamChannel()</code></td><td>Fetch <code>/api/network</code> once, draw GeoJSON lines, highlight the selected drain, show ordered station profile.</td></tr>
+    <tr><td>Interpolation</td><td><code>loadInterpolationData()</code>, <code>getInterpolationSurface()</code>, <code>refreshInterpolationOverlay()</code>, <code>buildInterpolationImage()</code>, <code>getInterpolationEstimateAt()</code></td><td>Fetch all surfaces once, pick the one for the current parameter/year, paint grid values into an off-screen <code>&lt;canvas&gt;</code>, overlay it as <code>L.imageOverlay</code>, and read values on click.</td></tr>
+    <tr><td>Filters</td><td><code>renderParameterTabs()</code>, <code>renderPeriodFilter()</code>, <code>renderYearFilter()</code>, <code>sync*Selection()</code></td><td>Build buttons from available data and keep selections valid when data disappears.</td></tr>
+    <tr><td>Screening</td><td><code>renderUseCaseTabs()</code>, <code>evaluateLocationSuitability()</code>, <code>extractScreeningInputs()</code>, <code>fitForHumanConsumption()</code>, <code>fitForAgriculture()</code>, <code>fitForAquaticLife()</code>, <code>fitForBathing()</code>, <code>determineSuitabilityStatus()</code></td><td>Rule-based pass/caution/fail per station from its latest filtered sample. Parameter aliases are marked "confirmed" or "proxy".</td></tr>
+    <tr><td>Parameter scale</td><td><code>refreshParameterScale()</code>, <code>getParameterScaleKey()</code>, <code>buildParameterScaleDomain()</code></td><td>Draw the safe band vs the current value for the chosen use case.</td></tr>
+    <tr><td>Per-view cache</td><td><code>currentViewKey()</code>, <code>cachedSuitability()</code>, <code>cachedPeriodRecords()</code></td><td>Compute screening once per (use case, period, year, parameter) instead of once per marker.</td></tr>
+  </table></div>
+  <p><code>styles.css</code> holds the layout (map-first, floating cards, side drawer), responsive rules and the light/dark theme variables that <code>chartTheme()</code> reads.</p>
+
+  <!-- reference data -->
+  <div class="module-head" id="m-ref"><h3>reference_data/</h3><span class="tag ext">Data</span><span class="loc">bundled files</span></div>
+  <div class="table-wrap"><table>
+    <tr><th>File</th><th>Used by</th><th>Purpose</th></tr>
+    <tr><td><code>indiawris_punjab_channels_2024.shp</code> (+ sidecars)</td><td><code>network.load_network</code></td><td>Default river/drain line network (India-WRIS, Punjab). Replace with <code>$OPENGEOSTREAMS_NETWORK</code> or a GeoParquet in <code>data/indiawris/</code> for other regions.</td></tr>
+    <tr><td><code>water_body_aliases.csv</code></td><td><code>network.load_aliases</code></td><td><code>alias,name</code> pairs mapping local names to one canonical name. Add your own via <code>$OPENGEOSTREAMS_ALIASES</code> or <code>data/water_body_aliases.csv</code>.</td></tr>
+  </table></div>
+</section>
+
+<!-- ================================================================ -->
+<section class="chapter" id="endpoints">
+  <h2>5. HTTP endpoint reference</h2>
+  <p class="kicker">Every route is defined in <code>DashboardHandler.do_GET</code> / <code>do_POST</code> in <code>server.py</code>. All <code>/api/*</code> routes require <code>?id=&lt;datasetId&gt;</code> (the UUID the browser gets from <code>/dashboard-data.js</code>).</p>
+  <div class="table-wrap"><table>
+    <tr><th>Method &amp; path</th><th>Query / body</th><th>Returns</th><th>Python behind it</th><th>Used by</th></tr>
+    <tr><td><span class="tag http">GET</span> <code>/</code> and static files</td><td>none</td><td><code>index.html</code>, JS, CSS</td><td><code>SimpleHTTPRequestHandler</code></td><td>Browser</td></tr>
+    <tr><td><span class="tag http">GET</span> <code>/dashboard-data.js</code></td><td>none</td><td><code>window.NCHOE_DASHBOARD_DATA = {…}</code></td><td><code>_dashboard_data</code> + <code>summary</code></td><td>Page boot</td></tr>
+    <tr><td><span class="tag http">GET</span> <code>/plotly.min.js</code></td><td>none</td><td>Plotly.js bundle</td><td><code>plotly_javascript()</code></td><td>Page boot</td></tr>
+    <tr><td><span class="tag http">GET</span> <code>/api/figure</code></td><td><code>kind</code> = trend | distribution | stream | interpolation; <code>parameter</code>, <code>location</code>, <code>year</code>, <code>month</code>, <code>grouping</code>, <code>channel</code></td><td>Plotly figure JSON</td><td><code>build_figure</code> → <code>plots.*_figure</code></td><td>Trend, Distribution, Stream tabs</td></tr>
+    <tr><td><span class="tag http">GET</span> <code>/api/network</code></td><td>none</td><td>Channels, ordered stations, GeoJSON</td><td><code>ensure_network</code> → <code>network.build_channel_network</code></td><td>Map lines, drain selector, channel summary</td></tr>
+    <tr><td><span class="tag http">GET</span> <code>/api/interpolation</code></td><td>none</td><td>All kriging surfaces (grid values)</td><td><code>ensure_interpolation</code> → <code>pipeline.build_interpolation_data</code></td><td>Map raster</td></tr>
+    <tr><td><span class="tag http">GET</span> <code>/api/elevations</code></td><td>none</td><td><code>{"stations": [...]}</code></td><td><code>elevation.fetch_elevations</code></td><td>Elevation panel</td></tr>
+    <tr><td><span class="tag http">GET</span> <code>/api/download</code></td><td>none</td><td>CSV attachment</td><td><code>RiverDataset.to_csv</code></td><td>Download link in layer list</td></tr>
+    <tr><td><span class="tag http">GET</span> <code>/datasets</code></td><td>none</td><td><code>{"datasets": [{id, fileName}], "activeId"}</code></td><td>server state</td><td>Layer list / file switcher</td></tr>
+    <tr><td><span class="tag http">GET</span> <code>/weather-history</code></td><td><code>latitude, longitude, start_date, end_date</code></td><td>Open-Meteo JSON (proxied)</td><td><code>fetch_weather_data</code></td><td>Not called by the current frontend; precipitation is embedded in the trend figure</td></tr>
+    <tr><td><span class="tag http">POST</span> <code>/upload-csv</code></td><td>multipart file; <code>?rows=all|N</code></td><td><code>{ok, fileName, summary, message}</code></td><td><code>process_uploaded_csv</code> → <code>load_csv</code>; then <code>warm_network</code></td><td>Import form</td></tr>
+    <tr><td><span class="tag http">POST</span> <code>/select-csv</code></td><td><code>{"id"}</code></td><td><code>{ok}</code></td><td>sets <code>active_dataset</code></td><td>File switcher</td></tr>
+    <tr><td><span class="tag http">POST</span> <code>/combine-csv</code></td><td><code>{"ids": [...], "name", "station"}</code></td><td><code>{ok, id, fileName, summary, message}</code></td><td><code>dataset.concat</code></td><td>Combine panel</td></tr>
+    <tr><td><span class="tag http">POST</span> <code>/reset-data</code></td><td>none</td><td><code>{ok, summary}</code></td><td>clears <code>datasets</code></td><td>"Clear all data"</td></tr>
+  </table></div>
+</section>
+
+<!-- ================================================================ -->
+<section class="chapter" id="flows">
+  <h2>6. Request walkthroughs</h2>
+  <p class="kicker">Four end-to-end traces through the whole stack. Together they cover every module.</p>
+
+  <h3>A. Uploading a CSV</h3>
+  <ol class="steps">
+    <li>User drops a file. The inline script in <code>index.html</code> POSTs it to <code>/upload-csv?rows=all</code>.</li>
+    <li><code>DashboardHandler.handle_upload</code> → <code>extract_uploaded_csv</code> → <code>process_uploaded_csv</code>. Non-CSV formats go through <code>convert_upload_to_csv</code> / <code>normalize_uploaded_table</code> first.</li>
+    <li><code>dataset.load_csv</code> → <code>RiverDataset._set_data</code> runs <code>pipeline.standardize_rows</code> → <code>merge_duplicate_locations</code> → <code>validate_rows</code> → <code>build_dashboard_data</code>.</li>
+    <li>The server stores the dataset under a new UUID, makes it active, and calls <code>warm_network()</code>, which starts drain/river matching on a background thread.</li>
+    <li>The response carries <code>summary</code>. The browser reloads, fetches the new <code>/dashboard-data.js</code>, and <code>app.js</code> boots: markers, parameter tabs, station list and filters all come from that payload.</li>
+  </ol>
+
+  <h3>B. Clicking a parameter → trend chart</h3>
+  <ol class="steps">
+    <li>A parameter button click sets <code>state.selectedParameter</code> and calls <code>refreshViewsForParameterChange()</code>.</li>
+    <li><code>renderLibraryFigure("trend", …)</code> aborts any in-flight trend request and fetches <code>/api/figure?id=…&amp;kind=trend&amp;parameter=BOD&amp;location=…&amp;year=all</code>.</li>
+    <li><code>build_figure</code> checks the figure cache. On a miss it copies the dataset, maps names with <code>pipeline.parameter_family</code>, filters location, year and month, then calls <code>view.plot_trend()</code>.</li>
+    <li><code>plots.trend_figure</code> adds a <code>Scatter</code> per station. For precipitation it uses rainfall rows from the CSV, or calls <code>_weather_precipitation</code> → <code>server.fetch_weather_data</code> → Open-Meteo archive.</li>
+    <li>The figure → <code>to_json()</code> → cached → returned. <code>app.js</code> merges its themed <code>chartLayout()</code> and calls <code>Plotly.react()</code>, then <code>installTrendHover()</code> attaches the custom tooltip.</li>
+  </ol>
+
+  <h3>C. The interpolation layer on the map</h3>
+  <ol class="steps">
+    <li><code>app.js</code> <code>loadInterpolationData()</code> fetches <code>/api/interpolation</code> once per dataset (one shared promise).</li>
+    <li><code>ensure_interpolation</code> first waits for <code>ensure_network</code>. The network was already warming since upload.</li>
+    <li><code>RiverDataset.interpolate</code> → <code>_network_river_mask</code> → <code>network.river_corridor_mask</code> rasterises matched channels onto the 192×192 grid.</li>
+    <li><code>pipeline.build_interpolation_data</code> builds an all-years surface and one per year for every parameter family, using ordinary kriging only inside the mask.</li>
+    <li>The browser picks the surface for the current parameter/year (<code>getInterpolationSurface</code>), converts it to a PNG via an off-screen canvas (<code>buildInterpolationImage</code>), and lays it on the map with <code>L.imageOverlay</code>. Switching parameter needs no new request.</li>
+  </ol>
+
+  <h3>D. Stream view for a single drain</h3>
+  <ol class="steps">
+    <li><code>loadChannelNetwork()</code> fetches <code>/api/network</code>, fills the drain <code>&lt;select&gt;</code>, draws GeoJSON lines, and chooses the drain of the selected station.</li>
+    <li><code>renderLibraryFigure("stream")</code> requests <code>/api/figure?kind=stream&amp;channel=&lt;channel-id&gt;</code>.</li>
+    <li><code>build_figure</code> reuses the cached network (<code>view._channel_network</code>) and calls <code>plot_stream(channel=…)</code>.</li>
+    <li><code>plots._channel_order</code> lists that channel's stations upstream → downstream, including "D/S of" stations on the receiving river. <code>stream_figure</code> pivots mean values into a station × year heatmap in that row order.</li>
+    <li><code>app.js</code> sizes the chart, pages it (<code>buildStreamPages</code>), and <code>renderChannelSummary()</code> shows length, outlet method and the latest-value profile along the drain.</li>
+  </ol>
+</section>
+
+<!-- ================================================================ -->
+<section class="chapter" id="caching">
+  <h2>7. Caching and threads</h2>
+  <p class="kicker">Network matching and kriging can take seconds, so results are computed once and reused at several levels.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Where</th><th>What is cached</th><th>Invalidated when</th></tr>
+    <tr><td><code>RiverDataset._channel_network</code></td><td>Network result</td><td><code>_set_data</code>, or <code>channel_network(refresh=True)</code></td></tr>
+    <tr><td><code>RiverDataset._interpolation</code></td><td>All kriging surfaces</td><td><code>_set_data</code></td></tr>
+    <tr><td><code>entry["figures"]</code></td><td>Up to 128 figure JSONs keyed by the sorted query (trend figures without precipitation are not cached, so they retry)</td><td>LRU eviction</td></tr>
+    <tr><td><code>entry["json_cache"]</code></td><td>Serialised + gzipped network and interpolation responses</td><td>New dataset entry</td></tr>
+    <tr><td><code>_fetch_weather_cached</code></td><td>Open-Meteo responses (<code>lru_cache</code>, 15-minute buckets)</td><td>Time bucket rolls over</td></tr>
+    <tr><td><code>plotly_javascript</code></td><td>Plotly.js bytes</td><td>Never (process lifetime)</td></tr>
+    <tr><td><code>app.js</code> per-view cache</td><td>Suitability and period records per (use case, period, year, parameter)</td><td>Any filter change</td></tr>
+  </table></div>
+  <p>Each dataset entry has its own locks: <code>figure_lock</code>, one <code>chart_locks[kind]</code> per chart type, plus <code>network_lock</code>, <code>interpolation_lock</code> and <code>elevation_lock</code>. Two browser tabs asking for the same slow result wait for one computation instead of starting two. Different chart kinds can still build in parallel.</p>
+</section>
+
+<!-- ================================================================ -->
+<section class="chapter" id="python">
+  <h2>8. Using it from Python</h2>
+  <p class="kicker">Everything the dashboard shows is available without the browser.</p>
+<pre><code>import opengeostreams as ogs
+
+ds = ogs.load_csv("Datasets/consolidated_dataset.csv", rows="all")
+print(ds.summary["locationCount"], "stations")
+ds.head()
+ds.describe("BOD")
+ds.coordinate_conflicts()                      # stations with inconsistent positions
+
+# Drain / river matching (needs opengeostreams[network])
+net = ds.channel_network()
+ds.assign_channels()                           # one row per station
+
+# Charts: the same figures the dashboard shows
+ds.plot_trend(parameter="BOD", location="N-CHOE D/S")
+ds.plot_distribution(parameter="BOD", grouping="month")
+ds.plot_stream(parameter="BOD", channel=net["channels"][0]["id"])
+ds.plot_stream(parameter="BOD", group_by_channel=True, save_path="stream.html")
+
+# Interpolation
+_, info = ds.interpolate()
+ds.plot(parameter="BOD", year=2023)
+ds.plot_map("bod_map.html", parameter="BOD")   # Folium map, opens in browser
+
+# Combining files
+merged = ogs.concat([ds, ogs.load_csv("other.csv")], name="combined.csv")
+
+# Launch the dashboard preloaded with this dataset
+server = merged.dashboard()                    # http://127.0.0.1:4173</code></pre>
+</section>
+
+<!-- ================================================================ -->
+<section class="chapter" id="where">
+  <h2>9. Where to change what</h2>
+  <p class="kicker">A cheat sheet for common changes.</p>
+  <div class="table-wrap"><table>
+    <tr><th>I want to…</th><th>Edit</th></tr>
+    <tr><td>Accept a new column name or date format</td><td><code>pipeline.standardize_rows</code>, <code>normalize_date</code>, <code>WATER_BODY_COLUMNS</code>; for wide tables, <code>server.normalize_uploaded_table</code></td></tr>
+    <tr><td>Add a parameter alias ("T.Coliform" style)</td><td><code>pipeline.normalize_parameter</code>, <code>parameter_family</code></td></tr>
+    <tr><td>Change how duplicate station labels merge</td><td><code>pipeline.merge_duplicate_locations</code> (or pass <code>merge_stations=False</code>)</td></tr>
+    <tr><td>Change a chart's traces, hover text or colours</td><td>The matching function in <code>plots.py</code></td></tr>
+    <tr><td>Change a chart's theme, margins or height in the dashboard</td><td><code>app.js</code> <code>chartLayout()</code>, <code>chartTheme()</code>, <code>styles.css</code> variables</td></tr>
+    <tr><td>Add a new chart type</td><td>New function in <code>plots.py</code> → method on <code>RiverDataset</code> → add the kind in <code>server.build_figure</code> (and <code>chart_locks</code> in <code>dataset_entry</code>) → call <code>renderLibraryFigure("newkind", …)</code> from <code>app.js</code> with a container in <code>index.html</code></td></tr>
+    <tr><td>Tune kriging (grid size, radius, variogram)</td><td><code>pipeline</code> constants and <code>interpolation_model</code></td></tr>
+    <tr><td>Change raster colours on the map</td><td><code>app.js</code> <code>getInterpolationColor()</code></td></tr>
+    <tr><td>Use a different river network or region</td><td>Set <code>OPENGEOSTREAMS_NETWORK</code>, or replace the file in <code>reference_data/</code></td></tr>
+    <tr><td>Teach it that two local names are the same river</td><td>Add a row to <code>water_body_aliases.csv</code></td></tr>
+    <tr><td>Change snapping distance or ordering rules</td><td><code>network.py</code> constants (<code>DEFAULT_MAX_DISTANCE_KM</code>, <code>NODE_TOLERANCE_M</code>, …) and <code>build_channel_network</code></td></tr>
+    <tr><td>Change suitability thresholds or rules</td><td><code>app.js</code> <code>fitFor*()</code> functions and the parameter-scale definitions near the top</td></tr>
+    <tr><td>Add an API endpoint</td><td><code>server.DashboardHandler.do_GET</code> / <code>do_POST</code> (and <code>handle_visualization</code> for dataset-scoped routes)</td></tr>
+  </table></div>
+</section>
+
+<footer>
+  OpenGeoStreams v2.0.0 · Written from the source of <code>opengeostreams/opengeostreams/</code>. Function names and behaviour reflect the code at the time of writing. If something here disagrees with the code, the code wins.
+</footer>
+</main>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement;
+    var button = document.getElementById("theme-btn");
+    try { var saved = localStorage.getItem("ogs-tutorial-theme"); if (saved) root.setAttribute("data-theme", saved); } catch (e) {}
+    button.addEventListener("click", function () {
+      var current = root.getAttribute("data-theme") ||
+        (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      var next = current === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("ogs-tutorial-theme", next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>

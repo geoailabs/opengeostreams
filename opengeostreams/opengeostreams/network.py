@@ -49,40 +49,62 @@ NETWORK_CANDIDATES = (
     pipeline.PROJECT_ROOT / "data" / "indiawris" / "WRIS_Rivers_2024.parquet",
     pipeline.PACKAGE_ROOT / "reference_data" / "indiawris_punjab_channels_2024.shp",
 )
+# Local names that mean the same water body ("alias,name" CSV). Users can add their own
+# file with OPENGEOSTREAMS_ALIASES or data/water_body_aliases.csv in the project folder.
+ALIASES_ENV = "OPENGEOSTREAMS_ALIASES"
+ALIAS_FILES = (
+    pipeline.PACKAGE_ROOT / "reference_data" / "water_body_aliases.csv",
+    pipeline.PROJECT_ROOT / "data" / "water_body_aliases.csv",
+)
 NODE_TOLERANCE_M = 30.0      # endpoints closer than this are the same network node
 CONFLUENCE_TOLERANCE_M = 250.0  # a channel end this close to another line is a confluence
+EXTENDED_SNAP_M = 5000.0  # beyond the limit, only onto a channel that already has stations
+EXTENDED_NEIGHBOUR_M = 10000.0  # ... and one of them within this distance
 NAME_MATCH_RADIUS_M = 15000.0   # search radius for lines matching a station's water-body name
 NAME_MATCH_THRESHOLD = 0.8
 ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
 OFFLINE_ENV = "OPENGEOSTREAMS_OFFLINE"
-MIN_ELEVATION_DROP_M = 5.0      # smaller differences between channel ends are treated as flat
+MIN_ELEVATION_DROP_M = 5.0
+MAX_ELEVATION_LEAVES = 6         # channel ends looked up per channel      # smaller differences between channel ends are treated as flat
 CONFLUENCE_ELEVATION_SLACK_M = 3.0
 _ELEVATION_CACHE: dict[tuple[float, float], float | None] = {}
 
 
-def fetch_point_elevations(points: list[tuple[float, float]], timeout: float = 10.0) -> dict[tuple[float, float], float]:
-    """Terrain elevation (m) for (lon, lat) points from Open-Meteo; {} when offline."""
+def fetch_point_elevations(points: list[tuple[float, float]], timeout: float = 10.0,
+                           budget_s: float = 20.0, workers: int = 6) -> dict[tuple[float, float], float]:
+    """Terrain elevation (m) for (lon, lat) points from Open-Meteo; {} when offline.
+
+    Requests (100 points each) run in parallel and the whole lookup stops after
+    ``budget_s`` seconds; points without an answer simply fall back to topology.
+    """
     if os.environ.get(OFFLINE_ENV):
         return {}
+    from concurrent.futures import ThreadPoolExecutor, wait
     keys = [(round(lon, 5), round(lat, 5)) for lon, lat in points]
     missing = [key for key in dict.fromkeys(keys) if key not in _ELEVATION_CACHE]
     try:
+        import certifi
+        context = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        context = ssl.create_default_context()
+
+    def fetch(batch):
+        query = urllib.parse.urlencode({"latitude": ",".join(str(lat) for _, lat in batch),
+                                        "longitude": ",".join(str(lon) for lon, _ in batch)})
+        request = urllib.request.Request(f"{ELEVATION_URL}?{query}", headers={"User-Agent": "OpenGeoStreams/2.0"})
+        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
+            values = json.loads(response.read().decode("utf-8")).get("elevation", [])
+        for key, value in zip(batch, values):
+            _ELEVATION_CACHE[key] = float(value) if isinstance(value, (int, float)) and math.isfinite(value) else None
+
+    if missing:
+        batches = [missing[start:start + 100] for start in range(0, len(missing), 100)]
+        pool = ThreadPoolExecutor(max_workers=max(1, min(workers, len(batches))))
         try:
-            import certifi
-            context = ssl.create_default_context(cafile=certifi.where())
-        except ImportError:
-            context = ssl.create_default_context()
-        for start in range(0, len(missing), 100):
-            batch = missing[start:start + 100]
-            query = urllib.parse.urlencode({"latitude": ",".join(str(lat) for _, lat in batch),
-                                            "longitude": ",".join(str(lon) for lon, _ in batch)})
-            request = urllib.request.Request(f"{ELEVATION_URL}?{query}", headers={"User-Agent": "OpenGeoStreams/2.0"})
-            with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
-                values = json.loads(response.read().decode("utf-8")).get("elevation", [])
-            for key, value in zip(batch, values):
-                _ELEVATION_CACHE[key] = float(value) if isinstance(value, (int, float)) and math.isfinite(value) else None
-    except Exception:  # network or service unavailable: fall back to topology
-        return {key: _ELEVATION_CACHE[key] for key in keys if _ELEVATION_CACHE.get(key) is not None}
+            futures = [pool.submit(fetch, batch) for batch in batches]
+            wait(futures, timeout=budget_s)  # failed or late batches are skipped
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
     return {key: _ELEVATION_CACHE[key] for key in keys if _ELEVATION_CACHE.get(key) is not None}
 
 # Words that describe the kind of water body; the word(s) before them are its name.
@@ -135,6 +157,34 @@ def parse_water_body(label: str) -> str:
     return ""
 
 
+def load_aliases() -> dict[str, str]:
+    """Map normalised local names to one preferred name, from the alias CSV files."""
+    import csv
+    paths = list(ALIAS_FILES)
+    if os.environ.get(ALIASES_ENV):
+        paths.append(Path(os.environ[ALIASES_ENV]))
+    aliases: dict[str, str] = {}
+    for path in paths:
+        path = Path(path).expanduser()
+        if not path.is_file():
+            continue
+        with path.open(encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                alias, name = (row.get("alias") or "").strip(), (row.get("name") or "").strip()
+                if alias and name:
+                    aliases[_base_name(alias)] = name
+                    aliases.setdefault(_base_name(name), name)
+    return aliases
+
+
+def canonical_name(name: str, aliases: dict[str, str] | None = None) -> str:
+    """Preferred name for a water body (e.g. "Attawa Choa" -> "N-Choe"); unchanged if unknown."""
+    if not name:
+        return name
+    aliases = load_aliases() if aliases is None else aliases
+    return aliases.get(_base_name(name), name)
+
+
 def _base_name(name: str) -> str:
     words = re.findall(r"[a-z]+", str(name).casefold())
     return " ".join(word for word in words if word.upper() not in TYPE_WORDS)
@@ -179,32 +229,83 @@ def find_network_path(path: str | Path | None = None) -> Path:
     )
 
 
+_NETWORK_CACHE: dict[tuple, Any] = {}
+
+
 def load_network(bounds: tuple[float, float, float, float], path: str | Path | None = None,
                  buffer_deg: float = 0.25):
-    """Read network lines intersecting ``bounds`` (min lon, min lat, max lon, max lat)."""
+    """Read network lines intersecting ``bounds`` (min lon, min lat, max lon, max lat).
+
+    Results are cached in memory per file and (rounded) area, so importing more
+    files from the same region does not re-read the network.
+    """
     gpd, _ = _geo()
     source = find_network_path(path)
     minx, miny, maxx, maxy = bounds
-    box = (minx - buffer_deg, miny - buffer_deg, maxx + buffer_deg, maxy + buffer_deg)
-    if source.suffix.lower() == ".parquet":
+    box = tuple(round(value, 1) for value in (minx - buffer_deg, miny - buffer_deg, maxx + buffer_deg, maxy + buffer_deg))
+    cache_key = (str(source.resolve()), source.stat().st_mtime, box)
+    if cache_key in _NETWORK_CACHE:
+        return _NETWORK_CACHE[cache_key].copy()
+    result = _read_network(source, box, gpd)
+    if len(_NETWORK_CACHE) >= 4:
+        _NETWORK_CACHE.pop(next(iter(_NETWORK_CACHE)))
+    _NETWORK_CACHE[cache_key] = result
+    return result.copy()
+
+
+def _read_parquet_bbox(source: Path, box: tuple[float, float, float, float]) -> pd.DataFrame:
+    try:
         import pyarrow.dataset as ds
-        dataset = ds.dataset(str(source))
-        names = set(dataset.schema.names)
+    except ImportError:
+        # pyarrow.dataset can be unavailable (e.g. its DLLs blocked by Windows Application
+        # Control); scan row groups with pyarrow.parquet instead.
+        ds = None
+    if ds is not None:
+        field = ds.field
+        table = ds.dataset(str(source)).to_table(filter=(field("xmax") >= box[0]) & (field("xmin") <= box[2])
+                                                 & (field("ymax") >= box[1]) & (field("ymin") <= box[3]))
+        return table.to_pandas()
+    import pyarrow.parquet as pq
+    parquet = pq.ParquetFile(str(source))
+    parts = []
+    for index in range(parquet.num_row_groups):
+        part = parquet.read_row_group(index).to_pandas()
+        mask = ((part["xmax"] >= box[0]) & (part["xmin"] <= box[2])
+                & (part["ymax"] >= box[1]) & (part["ymin"] <= box[3]))
+        if mask.any():
+            parts.append(part[mask])
+    if not parts:
+        return parquet.schema_arrow.empty_table().to_pandas()
+    return pd.concat(parts, ignore_index=True)
+
+
+def _read_network(source: Path, box: tuple[float, float, float, float], gpd):
+    if source.suffix.lower() == ".parquet":
+        import pyarrow.parquet as pq
+        names = set(pq.read_schema(str(source)).names)
         if {"xmin", "ymin", "xmax", "ymax"} <= names:
-            field = ds.field
-            table = dataset.to_table(filter=(field("xmax") >= box[0]) & (field("xmin") <= box[2])
-                                     & (field("ymax") >= box[1]) & (field("ymin") <= box[3]))
-            frame = table.to_pandas()
+            frame = _read_parquet_bbox(source, box)
             lines = gpd.GeoDataFrame(frame.drop(columns="geometry"),
                                      geometry=gpd.GeoSeries.from_wkb(frame["geometry"]), crs="EPSG:4326")
         else:
             lines = gpd.read_parquet(source).to_crs("EPSG:4326").cx[box[0]:box[2], box[1]:box[3]]
     else:
-        lines = gpd.read_file(source, bbox=box).to_crs("EPSG:4326")
+        try:
+            lines = gpd.read_file(source, bbox=box).to_crs("EPSG:4326")
+        except ImportError:
+            # read_file needs GDAL (pyogrio/fiona), whose DLLs can be missing or blocked
+            # on Windows; plain WGS84 polyline shapefiles are simple enough to read directly.
+            if source.suffix.lower() != ".shp":
+                raise
+            lines = _read_shapefile_lines(source, box, gpd)
     name_column = next((column for column in ("rivname", "channel", "name", "NAME", "river", "Name") if column in lines), None)
     kind_column = next((column for column in ("layer", "kind") if column in lines), None)
+    raw_names = lines[name_column].fillna("").astype(str).str.strip() if name_column else pd.Series("", index=lines.index)
+    aliases = load_aliases()
     result = gpd.GeoDataFrame({
-        "name": lines[name_column].fillna("").astype(str).str.strip() if name_column else "",
+        # Local preferred names (alias list) for display; the map's own name is kept too.
+        "name": [canonical_name(value, aliases) for value in raw_names],
+        "network_name": raw_names.tolist(),
         "kind": lines[kind_column].fillna("").astype(str) if kind_column else "",
     }, geometry=lines.geometry.values, crs="EPSG:4326")
     result = result[result.geometry.notna() & ~result.geometry.is_empty]
@@ -214,6 +315,66 @@ def load_network(bounds: tuple[float, float, float, float], path: str | Path | N
     return result
 
 
+def _read_shapefile_lines(source: Path, box: tuple[float, float, float, float], gpd):
+    """Read a geographic (WGS84) polyline shapefile without GDAL, keeping lines inside ``box``."""
+    import struct
+    from shapely.geometry import LineString, MultiLineString
+
+    prj = source.with_suffix(".prj")
+    if prj.is_file() and not prj.read_text(errors="ignore").lstrip().upper().startswith("GEOGCS"):
+        raise ImportError(f"{source.name} is projected; install pyogrio (GDAL) to read it.")
+
+    # Attribute table (.dbf): header, field descriptors, then fixed-width records.
+    attributes: list[dict[str, str]] = []
+    dbf = source.with_suffix(".dbf")
+    if dbf.is_file():
+        data = dbf.read_bytes()
+        count, header_size, record_size = struct.unpack("<IHH", data[4:12])
+        fields, offset = [], 32
+        while data[offset] != 0x0D:
+            name = data[offset:offset + 11].split(b"\0")[0].decode("ascii", "ignore")
+            fields.append((name, data[offset + 16]))
+            offset += 32
+        encoding = "utf-8"
+        cpg = source.with_suffix(".cpg")
+        if cpg.is_file():
+            encoding = cpg.read_text(errors="ignore").strip() or encoding
+        for index in range(count):
+            start = header_size + index * record_size + 1  # skip the deletion flag
+            row = {}
+            for name, width in fields:
+                row[name] = data[start:start + width].decode(encoding, "replace").strip()
+                start += width
+            attributes.append(row)
+
+    # Geometry (.shp): 100-byte header, then one record per feature.
+    data = source.read_bytes()
+    geometries, offset = [], 100
+    while offset + 8 <= len(data):
+        _, length = struct.unpack(">ii", data[offset:offset + 8])
+        body = offset + 8
+        offset = body + 2 * length
+        shape_type = struct.unpack("<i", data[body:body + 4])[0]
+        if shape_type not in (3, 13, 23):  # PolyLine, PolyLineZ, PolyLineM
+            geometries.append(None)
+            continue
+        xmin, ymin, xmax, ymax = struct.unpack("<4d", data[body + 4:body + 36])
+        if xmax < box[0] or xmin > box[2] or ymax < box[1] or ymin > box[3]:
+            geometries.append(None)
+            continue
+        num_parts, num_points = struct.unpack("<ii", data[body + 36:body + 44])
+        parts = list(struct.unpack(f"<{num_parts}i", data[body + 44:body + 44 + 4 * num_parts])) + [num_points]
+        start = body + 44 + 4 * num_parts
+        coords = struct.unpack(f"<{2 * num_points}d", data[start:start + 16 * num_points])
+        points = list(zip(coords[0::2], coords[1::2]))
+        pieces = [points[a:b] for a, b in zip(parts, parts[1:]) if b - a >= 2]
+        geometries.append(None if not pieces else LineString(pieces[0]) if len(pieces) == 1 else MultiLineString(pieces))
+
+    frame = pd.DataFrame(attributes) if len(attributes) == len(geometries) else pd.DataFrame(index=range(len(geometries)))
+    lines = gpd.GeoDataFrame(frame, geometry=geometries, crs="EPSG:4326")
+    return lines[lines.geometry.notna()].reset_index(drop=True)
+
+
 def station_table(frame: pd.DataFrame) -> pd.DataFrame:
     """One row per station (dashboard location name) with a representative coordinate."""
     data = frame.copy()
@@ -221,6 +382,7 @@ def station_table(frame: pd.DataFrame) -> pd.DataFrame:
     data["Latitude"] = pd.to_numeric(data["Latitude"], errors="coerce")
     data["Longitude"] = pd.to_numeric(data["Longitude"], errors="coerce")
     water_column = next((column for column in WATER_BODY_KEYS if column in data), None)
+    aliases = load_aliases()
     rows = []
     for location, group in data.groupby("Location", sort=True):
         if not location:
@@ -233,10 +395,12 @@ def station_table(frame: pd.DataFrame) -> pd.DataFrame:
             body = names.mode().iloc[0] if len(names) else ""
         rows.append({
             "Location": location,
-            "Latitude": float(valid["Latitude"].median()) if len(valid) else math.nan,
-            "Longitude": float(valid["Longitude"].median()) if len(valid) else math.nan,
-            "WaterBody": body,
-            "ParsedName": parse_water_body(location),
+            # Same position as the station's map marker (its first valid row), so the
+            # drain/river match always agrees with what the user sees on the map.
+            "Latitude": float(valid["Latitude"].iloc[0]) if len(valid) else math.nan,
+            "Longitude": float(valid["Longitude"].iloc[0]) if len(valid) else math.nan,
+            "WaterBody": canonical_name(body, aliases),
+            "ParsedName": canonical_name(parse_water_body(location), aliases),
         })
     return pd.DataFrame(rows, columns=["Location", "Latitude", "Longitude", "WaterBody", "ParsedName"])
 
@@ -291,6 +455,58 @@ def _dijkstra(adjacency: dict[int, list[tuple[int, float]]], source: int) -> dic
     return distances
 
 
+def river_corridor_mask(network_result: dict[str, Any], extent: dict[str, float], stations: list[tuple[float, float]],
+                        *, rows: int = pipeline.GRID_ROWS, columns: int = pipeline.GRID_COLUMNS,
+                        min_half_width_m: float = 400.0) -> dict[str, Any] | None:
+    """Rasterise the matched drains/rivers into an interpolation mask.
+
+    Kriging is only meaningful along the water: cells within a narrow corridor
+    around the channels that carry stations (plus a small disc around every
+    station) are kept, everything else stays transparent. The corridor is at
+    least one grid cell wide so the ribbon never breaks up on coarse grids.
+    """
+    import geopandas as gpd
+    import numpy as np
+    import shapely
+    from shapely.geometry import shape
+
+    lines = [shape(channel["geometry"]) for channel in network_result.get("channels", []) if channel.get("geometry")]
+    if not lines or not stations:
+        return None
+    points = gpd.GeoSeries(gpd.points_from_xy([lon for _, lon in stations], [lat for lat, _ in stations]), crs="EPSG:4326")
+    metric = points.estimate_utm_crs()
+    lat_step = (extent["maxLatitude"] - extent["minLatitude"]) / (rows - 1)
+    lon_step = (extent["maxLongitude"] - extent["minLongitude"]) / (columns - 1)
+    mid_lat = math.radians((extent["maxLatitude"] + extent["minLatitude"]) / 2)
+    cell_m = max(lat_step * 111_320.0, lon_step * 111_320.0 * math.cos(mid_lat))
+    half_width = max(min_half_width_m, 0.75 * cell_m)
+    corridor = gpd.GeoSeries(lines, crs="EPSG:4326").to_crs(metric).buffer(half_width)
+    discs = points.to_crs(metric).buffer(half_width * 1.5)
+    area = shapely.union_all(list(corridor) + list(discs))
+    grid_rows, grid_columns = np.divmod(np.arange(rows * columns), columns)
+    cell_lat = extent["maxLatitude"] - grid_rows * lat_step
+    cell_lon = extent["minLongitude"] + grid_columns * lon_step
+    cells = gpd.GeoSeries(gpd.points_from_xy(cell_lon, cell_lat), crs="EPSG:4326").to_crs(metric)
+    inside = shapely.contains_xy(area, cells.x.to_numpy(), cells.y.to_numpy())
+    return {"rows": rows, "cols": columns, "extent": extent, "maskValues": inside.astype(int).tolist(),
+            "generatedFrom": "matched drain/river network", "activeCellCount": int(inside.sum()),
+            "widthStats": {"halfWidthM": round(half_width, 1)}}
+
+
+def _rounded_geojson(geometry, digits=5):
+    """GeoJSON dict with coordinates rounded to ~1 m (keeps the payload small)."""
+    def walk(value):
+        if isinstance(value, (list, tuple)):
+            if value and isinstance(value[0], (int, float)):
+                return [round(float(item), digits) for item in value]
+            return [walk(item) for item in value]
+        return value
+    shape = geometry.__geo_interface__
+    if "coordinates" not in shape:
+        return shape
+    return {"type": shape["type"], "coordinates": walk(shape["coordinates"])}
+
+
 def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAULT_MAX_DISTANCE_KM,
                           network=None, network_path: str | Path | None = None,
                           use_elevation: bool = True) -> dict[str, Any]:
@@ -326,6 +542,7 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
     lines["key"] = lines["name"].str.casefold()
     keys = lines["key"].tolist()
     names = lines["name"].tolist()
+    network_names = (lines["network_name"] if "network_name" in lines else lines["name"]).tolist()
     kinds = lines["kind"].tolist()
     geoms = lines.geometry.values
     nodes = _Nodes(lines)
@@ -336,6 +553,7 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
     station_line: dict[int, tuple[int, float]] = {}
     station_source: dict[int, str] = {}
     name_only: dict[int, str] = {}
+    deferred: list[tuple[int, int | None, float]] = []  # (station, nearest line, metres) beyond the limit
     for index, row in points_m.iterrows():
         point = row.geometry
         column_name = str(row["WaterBody"]).strip()
@@ -364,11 +582,7 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
                 continue
             any_line = tree.query_nearest(point, return_distance=False)
             near = int(any_line[0]) if len(any_line) else None
-            result["unassigned"].append({
-                "location": row["Location"],
-                "nearest": names[near] if near is not None else None,
-                "distanceM": round(float(geoms[near].distance(point)), 1) if near is not None else None,
-            })
+            deferred.append((index, near, float(geoms[near].distance(point)) if near is not None else math.inf))
             continue
         station_line[index] = (chosen, float(geoms[chosen].distance(point)))
 
@@ -417,6 +631,27 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
         station_source[station_index] = "same name as other stations"
         del name_only[station_index]
 
+    # A station a little beyond the limit still joins a drain/river that already carries
+    # other stations of this file (e.g. a WRIS line drawn a few km off the real channel).
+    placed_on: dict[int, list[int]] = {}
+    for placed_index, (line_index, _) in station_line.items():
+        placed_on.setdefault(component_for(line_index), []).append(placed_index)
+
+    def next_to_placed(station_index: int, component: int) -> bool:
+        point = points_m.geometry.iat[station_index]
+        return any(points_m.geometry.iat[other].distance(point) <= EXTENDED_NEIGHBOUR_M for other in placed_on.get(component, []))
+
+    for station_index, near, distance in deferred:
+        if near is not None and distance <= EXTENDED_SNAP_M and next_to_placed(station_index, component_for(near)):
+            station_line[station_index] = (near, distance)
+            station_source[station_index] = "nearest line (beyond 2 km, next to other stations)"
+            continue
+        result["unassigned"].append({
+            "location": points_m.at[station_index, "Location"],
+            "nearest": names[near] if near is not None else None,
+            "distanceM": round(distance, 1) if near is not None else None,
+        })
+
     grouped: dict[int, list[int]] = {}
     for station_index, (line_index, _) in station_line.items():
         grouped.setdefault(component_for(line_index), []).append(station_index)
@@ -440,7 +675,18 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
     # Terrain elevation of every channel end (one batched request).
     leaf_elevation: dict[int, float] = {}
     if use_elevation:
-        leaf_nodes = sorted({leaf for _, leaves in graphs.values() for leaf in leaves})
+        # Only the ends that can decide direction: for branchy channels, the ends farthest from
+        # the channel's centre (source and mouth are almost always among them).
+        candidate_leaves = set()
+        for _, leaves in graphs.values():
+            if len(leaves) > MAX_ELEVATION_LEAVES:
+                xs = [nodes.coords[leaf][0] for leaf in leaves]
+                ys = [nodes.coords[leaf][1] for leaf in leaves]
+                cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
+                leaves = sorted(leaves, key=lambda leaf: -math.hypot(nodes.coords[leaf][0] - cx, nodes.coords[leaf][1] - cy))
+                leaves = leaves[:MAX_ELEVATION_LEAVES]
+            candidate_leaves.update(leaves)
+        leaf_nodes = sorted(candidate_leaves)
         if leaf_nodes:
             wgs = gpd.GeoSeries(gpd.points_from_xy([nodes.coords[leaf][0] for leaf in leaf_nodes],
                                                    [nodes.coords[leaf][1] for leaf in leaf_nodes]), crs=metric).to_crs("EPSG:4326")
@@ -453,6 +699,7 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
     result["elevationSource"] = "Open-Meteo elevation API (Copernicus DEM)" if leaf_elevation else None
 
     used_ids: set[str] = set()
+    channel_geometries = []
     for component_id, station_indexes in grouped.items():
         members = components[component_id]
         member_set = set(members)
@@ -520,6 +767,7 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
         for order, item in enumerate(ordered, 1):
             item["order"] = order
         name = names[members[0]] or "Unnamed channel"
+        map_name = network_names[members[0]] or name
         file_names = {str(points_m.at[index, "WaterBody"]).strip() for index in station_indexes} - {""}
         display = next(iter(file_names)) if len(file_names) == 1 else name
         label_counts: dict[str, int] = {}
@@ -528,9 +776,12 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
             if label:
                 label_counts[label] = label_counts.get(label, 0) + 1
         if not file_names and label_counts:
-            # Use the local name when most stations on this channel carry it (e.g. WRIS "Para" = "Sagarpara Drain").
-            top = max(label_counts, key=label_counts.get)
-            if label_counts[top] * 2 >= len(station_indexes) and name_similarity(top, name) < NAME_MATCH_THRESHOLD:
+            # Prefer the local name from the station labels: when most stations carry it, or when
+            # no label uses the WRIS name at all (e.g. WRIS "Tangori Choe" is locally the N-choe).
+            top = max(sorted(label_counts), key=label_counts.get)
+            wris_used = any(name_similarity(label, name) >= NAME_MATCH_THRESHOLD for label in label_counts)
+            if name_similarity(top, name) < NAME_MATCH_THRESHOLD and (
+                    label_counts[top] * 2 >= len(station_indexes) or not wris_used):
                 display = top
         aliases = [alias for alias in sorted(label_counts) if name_similarity(alias, display) < NAME_MATCH_THRESHOLD
                    and name_similarity(alias, name) < NAME_MATCH_THRESHOLD]
@@ -538,12 +789,11 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
         while channel_id in used_ids:
             channel_id += "-2"
         used_ids.add(channel_id)
-        geometry = gpd.GeoSeries(lines.geometry.iloc[members].values, crs=metric).union_all()
-        geometry_wgs = gpd.GeoSeries([geometry], crs=metric).to_crs("EPSG:4326").simplify(0.0002).iloc[0]
+        channel_geometries.append(shapely.union_all(geoms[members]))
         result["channels"].append({
             "id": channel_id,
             "name": display,
-            "networkName": name,
+            "networkName": map_name,
             "kind": kinds[members[0]],
             "lengthKm": round(sum(geoms[member].length for member in members) / 1000.0, 2),
             "outletMethod": outlet_method,
@@ -553,8 +803,18 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
             "highestEndElevationM": round(max(heights.values()), 1) if heights else None,
             "aliases": aliases,
             "stations": ordered,
-            "geometry": geometry_wgs.__geo_interface__,
+            "geometry": None,  # filled in one batch below
         })
+    # Simplify and reproject all channel lines in one vectorised step. Small study
+    # areas keep 20 m detail; country-wide files use a coarser tolerance so the
+    # browser is not asked to draw millions of vertices.
+    if channel_geometries:
+        series = gpd.GeoSeries(channel_geometries, crs=metric)
+        total_km = float(series.length.sum()) / 1000.0
+        tolerance = 20.0 if total_km <= 1000 else min(150.0, 20.0 * (total_km / 1000.0) ** 0.5)
+        simplified = series.simplify(tolerance).to_crs("EPSG:4326")
+        for channel, geometry in zip(result["channels"], simplified):
+            channel["geometry"] = _rounded_geojson(geometry)
     for body, station_indexes in body_only.items():
         channel_id = _slug(body)
         while channel_id in used_ids:
@@ -572,7 +832,52 @@ def build_channel_network(frame: pd.DataFrame, *, max_distance_km: float = DEFAU
         })
     result["channels"].sort(key=lambda channel: (-len(channel["stations"]), channel["name"].casefold()))
     result["unassigned"].sort(key=lambda item: item["location"])
+    _attach_downstream_references(result)
     return result
+
+
+DOWNSTREAM_OF = re.compile(r"\b(?:D\s*/\s*S|DOWN\s*STREAM|DOWNSTREAM)\b\.?\s*(?:OF\s+)?(?:THE\s+)?(.+)$", re.IGNORECASE)
+
+
+AT_CONFLUENCE = re.compile(r"\b(?:BEFORE|AT|NEAR|U\s*/\s*S\s+OF)\s+(?:THE\s+)?(?:CONFLUENCE|CONF)\b", re.IGNORECASE)
+
+
+def _attach_downstream_references(result: dict[str, Any]) -> None:
+    """Show a receiving-river station labelled "D/S of <drain>" at the end of that drain.
+
+    Such a station sits on the bigger river just after the drain joins it, so it
+    shows what the drain does to the river. It keeps its own river assignment and
+    is only added (as ``downstream``) to the single-drain view of that drain.
+    """
+    aliases = load_aliases()
+    # A station far from the mapped line but labelled "before confluence" is at the outlet.
+    for channel in result["channels"]:
+        if channel.get("outletMethod") != "confluence":
+            continue
+        for station in channel["stations"]:
+            if station.get("distanceToOutletKm") is None and AT_CONFLUENCE.search(str(station["location"])):
+                station["distanceToOutletKm"] = 0.0
+                station["positionFrom"] = "station label (at the confluence)"
+    candidates = [(channel["id"], station["location"]) for channel in result["channels"] for station in channel["stations"]]
+    candidates += [(None, item["location"]) for item in result.get("unassigned", [])]
+    for channel in result["channels"]:
+        names = {channel["name"], *(channel.get("aliases") or [])}
+        if channel.get("networkName"):
+            names.add(channel["networkName"])
+        own = {station["location"] for station in channel["stations"]}
+        references = []
+        for owner, location in candidates:
+            if owner == channel["id"] or location in own:
+                continue
+            match = DOWNSTREAM_OF.search(str(location))
+            if not match:
+                continue
+            target = parse_water_body(match.group(1)) or match.group(1).strip()
+            target = canonical_name(target, aliases)
+            if any(name_similarity(target, name) >= 0.85 for name in names):
+                references.append({"location": location, "channel": owner,
+                                   "note": "on the receiving river, downstream of this drain"})
+        channel["downstream"] = references
 
 
 _UPSTREAM_LABEL = re.compile(r"\b(?:U/?S|UPSTREAM)\b", re.IGNORECASE)

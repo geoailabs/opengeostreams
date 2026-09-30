@@ -331,6 +331,9 @@
   /* ---------- Data layer list (mirrors the Active CSV select) ---------- */
 
   const selector = $("csv-dataset-select");
+  // Files ticked for "Combine" (ids of imported datasets).
+  const combineSelection = new Set();
+
   function renderLayerList() {
     const list = $("layer-list");
     const options = Array.from(selector.options).filter((option) => option.value);
@@ -338,30 +341,119 @@
     list.replaceChildren();
     if (!options.length) {
       list.innerHTML = '<p class="list-empty">No data yet. Add a file to create a layer.</p>';
+      combineSelection.clear();
+      renderCombinePanel(options);
       return;
     }
+    const ids = new Set(options.map((option) => option.value));
+    [...combineSelection].forEach((id) => { if (!ids.has(id)) combineSelection.delete(id); });
+    const canCombine = options.length >= 2;
     options.forEach((option) => {
       const active = option.value === selector.value;
+      const item = document.createElement("div");
+      item.className = `layer-item${active ? " is-active" : ""}`;
+      if (canCombine) {
+        const check = document.createElement("label");
+        check.className = "layer-check";
+        check.title = "Select to combine";
+        check.innerHTML = `<input type="checkbox" aria-label="Select ${escapeHtml(option.textContent)} to combine">`;
+        const input = check.querySelector("input");
+        input.checked = combineSelection.has(option.value);
+        input.addEventListener("change", () => {
+          if (input.checked) combineSelection.add(option.value);
+          else combineSelection.delete(option.value);
+          renderCombinePanel(options);
+        });
+        item.appendChild(check);
+      }
       const row = document.createElement("button");
       row.type = "button";
       row.className = `layer-row${active ? " is-active" : ""}`;
       row.setAttribute("aria-pressed", String(active));
       row.dataset.id = option.value;
+      const combinedFrom = active && Array.isArray(summary.combinedFrom) ? summary.combinedFrom : null;
       const meta = active && Number.isFinite(summary.recordCount)
-        ? `${summary.recordCount.toLocaleString()} rows · ${summary.mappedLocationCount ?? 0} stations`
+        ? `${summary.recordCount.toLocaleString()} rows · ${summary.mappedLocationCount ?? 0} station${summary.mappedLocationCount === 1 ? "" : "s"}`
+          + (combinedFrom ? ` · combined from ${combinedFrom.length} files` : "")
         : "Click to switch";
       row.innerHTML = `
-        <span class="layer-icon"><svg class="i"><use href="#i-file"/></svg></span>
-        <span class="layer-text"><strong title="${escapeHtml(option.textContent)}">${escapeHtml(option.textContent)}</strong><small>${escapeHtml(meta)}</small></span>
+        <span class="layer-icon"><svg class="i"><use href="#${combinedFrom ? "i-merge" : "i-file"}"/></svg></span>
+        <span class="layer-text"><strong title="${escapeHtml(option.textContent)}">${escapeHtml(option.textContent)}</strong><small title="${escapeHtml(combinedFrom ? combinedFrom.join(", ") : "")}">${escapeHtml(meta)}</small></span>
         <span class="layer-radio" aria-hidden="true"></span>`;
       row.addEventListener("click", () => {
         if (active || selector.disabled) return;
         selector.value = option.value;
         selector.dispatchEvent(new Event("change"));
       });
-      list.appendChild(row);
+      item.appendChild(row);
+      const download = document.createElement("a");
+      download.className = "icon-btn icon-btn-sm layer-download";
+      download.href = `/api/download?id=${encodeURIComponent(option.value)}`;
+      download.setAttribute("download", "");
+      download.title = `Download ${option.textContent} as CSV`;
+      download.innerHTML = `<svg class="i"><use href="#i-download"/></svg><span class="sr-only">Download ${escapeHtml(option.textContent)} as CSV</span>`;
+      item.appendChild(download);
+      list.appendChild(item);
     });
+    renderCombinePanel(options);
   }
+
+  function renderCombinePanel(options) {
+    const panel = $("combine-panel");
+    if (!panel) return;
+    panel.hidden = options.length < 2;
+    const count = combineSelection.size;
+    $("combine-form").hidden = count < 2;
+    $("combine-hint").textContent = count < 2
+      ? "Tick two or more files to combine them into one dataset."
+      : `${count} files selected.`;
+    $("combine-button").textContent = `Combine ${count} files`;
+    const nameInput = $("combine-name");
+    if (!nameInput.dataset.edited) {
+      const names = options.filter((option) => combineSelection.has(option.value))
+        .map((option) => option.textContent.replace(/\.[A-Za-z0-9]+$/, "").replace(/\s*\(\d+\)$/, "").replace(/^combined[_\s-]*/i, ""));
+      nameInput.value = names.length >= 2 ? `combined_${names.join("_")}`.slice(0, 100) + ".csv" : "";
+    }
+  }
+
+  $("combine-name").addEventListener("input", (event) => { event.target.dataset.edited = event.target.value ? "1" : ""; });
+  $("combine-one-station").addEventListener("change", (event) => {
+    $("combine-station").hidden = !event.target.checked;
+    if (event.target.checked) $("combine-station").focus();
+  });
+  $("combine-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const oneStation = $("combine-one-station").checked;
+    const station = $("combine-station").value.trim();
+    if (oneStation && !station) {
+      toast("Enter the station name, or untick “All one station”.", "error");
+      $("combine-station").focus();
+      return;
+    }
+    const button = $("combine-button");
+    button.disabled = true;
+    document.body.classList.add("is-busy");
+    try {
+      const response = await fetch("/combine-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...combineSelection], name: $("combine-name").value.trim(), station: oneStation ? station : null }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not combine the files.");
+      try {
+        window.sessionStorage.setItem("nchoe-csv-status", result.message);
+        window.sessionStorage.removeItem("nchoe-dashboard-cleared");
+        window.sessionStorage.removeItem("nchoe-dashboard-shape");
+      } catch (_error) { /* storage unavailable: the page still reloads */ }
+      window.location.replace("/?data=" + Date.now());
+    } catch (error) {
+      toast(error.message, "error");
+      button.disabled = false;
+      document.body.classList.remove("is-busy");
+    }
+  });
+
   new MutationObserver(renderLayerList).observe(selector, { childList: true, attributes: true, attributeFilter: ["disabled"] });
   selector.addEventListener("change", renderLayerList);
   renderLayerList();
@@ -384,6 +476,12 @@
   /* ---------- Station list and context labels ---------- */
 
   const stationSearch = $("station-search");
+  // Large files can hold thousands of stations. The list is rebuilt only when its
+  // content changes (not on every selection), shows at most STATION_LIMIT rows until
+  // the user searches, and uses one delegated click handler.
+  const STATION_LIMIT = 250;
+  let stationSignature = "";
+  let stationRows = new Map();
   function renderStations() {
     const api = window.OGS;
     const list = $("station-list");
@@ -391,33 +489,52 @@
     const stations = api.getStations();
     const query = stationSearch.value.trim().toLowerCase();
     $("station-count").textContent = String(stations.length);
-    list.replaceChildren();
+    const active = stations.find((station) => station.active)?.name || "";
+    const signature = `${query}\u0000${stations.length}\u0000${stations.map((s) => `${s.name}|${s.status}|${s.latest}`).join("\u0001")}`;
+    if (signature === stationSignature) {
+      stationRows.forEach((row, name) => row.classList.toggle("is-active", name === active));
+      return;
+    }
+    stationSignature = signature;
+    stationRows = new Map();
     if (!stations.length) {
       list.innerHTML = '<p class="list-empty">Stations with coordinates appear here.</p>';
       return;
     }
-    stations
+    const matches = stations
       .filter((station) => !query || station.name.toLowerCase().includes(query))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .forEach((station) => {
-        const row = document.createElement("button");
-        row.type = "button";
-        row.className = `station-row${station.active ? " is-active" : ""}`;
-        row.title = `${station.name}: ${station.statusLabel}`;
-        row.innerHTML = `
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const fragment = document.createDocumentFragment();
+    matches.slice(0, STATION_LIMIT).forEach((station) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = `station-row${station.name === active ? " is-active" : ""}`;
+      row.dataset.station = station.name;
+      row.title = `${station.name}: ${station.statusLabel}`;
+      row.innerHTML = `
           <span class="status-dot status-${escapeHtml(station.status)}" aria-hidden="true"></span>
           <span class="station-text">
             <span class="station-name">${escapeHtml(station.name)}</span>
             <span class="station-value">${escapeHtml(station.latest || "No value for this period")}</span>
           </span>
           <span class="sr-only">${escapeHtml(station.statusLabel)}</span>`;
-        row.addEventListener("click", () => {
-          api.selectLocation(station.name);
-          if (mobileQuery.matches) setLayersOpen(false);
-        });
-        list.appendChild(row);
-      });
+      stationRows.set(station.name, row);
+      fragment.appendChild(row);
+    });
+    if (matches.length > STATION_LIMIT) {
+      const more = document.createElement("p");
+      more.className = "list-empty";
+      more.textContent = `Showing ${STATION_LIMIT} of ${matches.length}. Search to find others.`;
+      fragment.appendChild(more);
+    }
+    list.replaceChildren(fragment);
   }
+  $("station-list").addEventListener("click", (event) => {
+    const row = event.target.closest(".station-row");
+    if (!row || !window.OGS) return;
+    window.OGS.selectLocation(row.dataset.station);
+    if (mobileQuery.matches) setLayersOpen(false);
+  });
   stationSearch.addEventListener("input", renderStations);
 
   function renderContext() {

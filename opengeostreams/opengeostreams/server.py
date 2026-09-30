@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import io
 import csv
+import datetime
+import gzip
 import re
 import tempfile
 from collections import OrderedDict
@@ -43,7 +45,25 @@ def create_ssl_context() -> ssl.SSLContext:
 
 
 def fetch_weather_data(parameters: dict[str, str], timeout: int = 20) -> tuple[int, str, bytes]:
-    """Fetch historical weather JSON for the local proxy endpoint."""
+    """Fetch historical weather JSON for the local proxy endpoint.
+
+    The Open-Meteo archive only covers 1940-01-01 up to about yesterday, so a
+    sample period that starts earlier or ends in the future (e.g. "2026" for the
+    current year) is clipped to that window instead of failing the whole chart.
+    """
+    parameters = dict(parameters)
+    try:
+        start = datetime.date.fromisoformat(parameters["start_date"])
+        end = datetime.date.fromisoformat(parameters["end_date"])
+    except (KeyError, ValueError):
+        start = end = None
+    if start is not None:
+        latest = datetime.date.today() - datetime.timedelta(days=1)
+        start, end = max(start, WEATHER_FIRST_DATE), min(end, latest)
+        if start > end:
+            empty = {"daily": {"time": [], "precipitation_sum": [], "weather_code": []}}
+            return 200, "application/json", json.dumps(empty).encode("utf-8")
+        parameters.update(start_date=start.isoformat(), end_date=end.isoformat())
     return _fetch_weather_cached(tuple(sorted(parameters.items())), timeout, int(time.monotonic() // 900))
 
 
@@ -61,6 +81,10 @@ def _fetch_weather_cached(items, timeout, bucket):
     )
     with urllib.request.urlopen(request, timeout=timeout, context=create_ssl_context()) as response:
         return response.status, response.headers.get_content_type(), response.read()
+
+
+GZIP_MIN_BYTES = 64 * 1024
+WEATHER_FIRST_DATE = datetime.date(1940, 1, 1)
 
 
 def json_bytes(payload: dict[str, Any]) -> bytes:
@@ -195,7 +219,22 @@ def ensure_network(entry):
         return entry["dataset"].channel_network()
 
 
+def warm_network(entry):
+    """Start drain/river matching in the background right after an import."""
+    def run():
+        try:
+            ensure_network(entry)
+        except Exception:  # reported when the dashboard asks for /api/network
+            pass
+    threading.Thread(target=run, name="network-warmup", daemon=True).start()
+
+
 def ensure_interpolation(entry):
+    # The surface follows the matched rivers, so reuse (or wait for) the network build.
+    try:
+        ensure_network(entry)
+    except Exception:
+        pass
     with entry["interpolation_lock"]:
         dataset = entry["dataset"]
         if dataset._interpolation is None:
@@ -290,14 +329,27 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
-    def send_json(self, status: int, payload: dict[str, Any]) -> None:
-        content = json_bytes(payload)
+    def send_json(self, status: int, payload: dict[str, Any], *, cache: dict | None = None, cache_key: str | None = None) -> None:
+        """Send JSON, gzip-compressed when large. Big payloads that never change for
+        a dataset (network, interpolation) are serialised once and kept in ``cache``."""
+        cached = cache.get(cache_key) if cache is not None and cache_key else None
+        if cached is None:
+            content = json_bytes(payload)
+            compressed = gzip.compress(content, compresslevel=5) if len(content) > GZIP_MIN_BYTES else None
+            cached = (content, compressed)
+            if cache is not None and cache_key:
+                cache[cache_key] = cached
+        content, compressed = cached
+        use_gzip = compressed is not None and "gzip" in (self.headers.get("Accept-Encoding") or "")
+        body = compressed if use_gzip else content
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(content)))
+        if use_gzip:
+            self.send_header("Content-Encoding", "gzip")
+        self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(content)
+        self.wfile.write(body)
 
     def do_POST(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
         route = urllib.parse.urlparse(self.path).path
@@ -311,6 +363,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_json(HTTPStatus.OK, {"ok": True, "summary": data["summary"]})
         elif route == "/select-csv":
             self.handle_select_csv()
+        elif route == "/combine-csv":
+            self.handle_combine_csv()
         else:
             self.send_json(HTTPStatus.NOT_FOUND, {"ok": False, "error": "Endpoint not found."})
 
@@ -329,7 +383,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 data["datasetId"] = active
             self.send_content("application/javascript", b"window.NCHOE_DASHBOARD_DATA = " + json_bytes(data) + b";")
             return
-        if route in {"/api/figure", "/api/interpolation", "/api/elevations", "/api/network"}:
+        if route in {"/api/figure", "/api/interpolation", "/api/elevations", "/api/network", "/api/download"}:
             self.handle_visualization(route)
             return
         if urllib.parse.urlparse(self.path).path == "/datasets":
@@ -358,6 +412,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 dataset_id = uuid.uuid4().hex
                 self.server.datasets[dataset_id] = dataset_entry(dataset, filename)
                 self.server.active_dataset = dataset_id
+                warm_network(self.server.datasets[dataset_id])
             self.send_json(HTTPStatus.OK, {
                 "ok": True, "fileName": filename, "summary": data["summary"],
                 "message": (f"Loaded {data['summary']['recordCount']} rows and "
@@ -392,6 +447,54 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": "Could not switch CSV."})
 
 
+    def handle_combine_csv(self) -> None:
+        """Concatenate imported datasets into a new one (optionally as a single station)."""
+        from .dataset import concat
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 16384:
+                raise ValueError("Invalid combine request.")
+            request = json.loads(self.rfile.read(length))
+            ids = request.get("ids") if isinstance(request, dict) else None
+            if not isinstance(ids, list) or len(ids) < 2 or not all(isinstance(item, str) for item in ids):
+                raise ValueError("Choose at least two imported files to combine.")
+            ids = list(dict.fromkeys(ids))
+            if len(ids) < 2:
+                raise ValueError("Choose at least two different imported files to combine.")
+            station = request.get("station")
+            if station is not None and (not isinstance(station, str) or not station.strip()):
+                raise ValueError("Enter a station name, or untick 'all one station'.")
+            name = " ".join(str(request.get("name") or "").split())[:120]
+            with self.server.dataset_lock:
+                entries = [self.server.datasets.get(item) for item in ids]
+            if any(entry is None for entry in entries):
+                raise ValueError("One of the files is no longer available. Please import it again.")
+            if not name:
+                name = "combined_" + "_".join(re.sub(r"\.[A-Za-z0-9]+$", "", entry["name"]) for entry in entries)[:100] + ".csv"
+            if not name.lower().endswith(".csv"):
+                name += ".csv"
+            combined = concat([entry["dataset"] for entry in entries], name=name,
+                              station=station.strip() if station else None)
+            combined._import_metadata = {"combinedFrom": [entry["name"] for entry in entries]}
+            with self.server.dataset_lock:
+                dataset_id = uuid.uuid4().hex
+                self.server.datasets[dataset_id] = dataset_entry(combined, name)
+                self.server.active_dataset = dataset_id
+                warm_network(self.server.datasets[dataset_id])
+            summary = combined.summary
+            merged = sum(len(item["merged"]) for item in summary.get("mergedLocations", []))
+            self.send_json(HTTPStatus.OK, {
+                "ok": True, "id": dataset_id, "fileName": name, "summary": summary,
+                "message": (f"Combined {len(entries)} files into {name}: {summary['recordCount']} rows, "
+                            f"{summary['locationCount']} station{'s' if summary['locationCount'] != 1 else ''}"
+                            + (f", {merged} duplicate label{'s' if merged != 1 else ''} merged." if merged else ".")),
+            })
+        except (ValueError, TypeError, json.JSONDecodeError) as error:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(error)})
+        except Exception as error:
+            self.log_error("Combine failed: %s", error)
+            self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"ok": False, "error": "Could not combine the files."})
+
     def send_content(self, content_type, content):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
@@ -416,15 +519,33 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     result = entry["elevations"]
                 self.send_json(HTTPStatus.OK, result)
                 return
+            if route == "/api/download":
+                name = re.sub(r"[^A-Za-z0-9._ -]+", "_", entry["name"]).strip() or "dataset"
+                if not name.lower().endswith(".csv"):
+                    name = re.sub(r"\.[A-Za-z0-9]+$", "", name) + ".csv"
+                content = entry["dataset"].to_csv().encode("utf-8")
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "text/csv; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="{name}"')
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
             if route == "/api/network":
                 try:
                     result = {"available": True, **ensure_network(entry)}
                 except ValueError as error:
                     result = {"available": False, "error": str(error), "channels": [], "unassigned": []}
-                self.send_json(HTTPStatus.OK, result)
+                self.send_json(HTTPStatus.OK, result, cache=entry.setdefault("json_cache", {}),
+                               cache_key="network" if result.get("available") else None)
                 return
-            result = ensure_interpolation(entry) if route == "/api/interpolation" else build_figure(entry, query)
-            self.send_json(HTTPStatus.OK, result)
+            if route == "/api/interpolation":
+                self.send_json(HTTPStatus.OK, ensure_interpolation(entry),
+                               cache=entry.setdefault("json_cache", {}), cache_key="interpolation")
+                return
+            self.send_json(HTTPStatus.OK, build_figure(entry, query))
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            return  # the browser cancelled the request (e.g. a newer selection replaced it)
         except (ValueError, TypeError) as error:
             self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
         except Exception as error:

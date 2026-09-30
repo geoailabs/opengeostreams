@@ -121,6 +121,11 @@ class DashboardLibraryTests(unittest.TestCase):
                 page.on('pageerror', lambda error: errors.append(str(error)))
                 page.goto(self.base)
                 page.wait_for_function("document.getElementById('stream-visualization').data?.length", timeout=90000)
+                # Elevation ordering applies to the A-Z view (a single drain keeps its upstream order).
+                page.wait_for_function("!document.getElementById('stream-channel').disabled && !/Matching/.test(document.getElementById('channel-note').textContent)", timeout=90000)
+                if page.locator('#stream-channel option[value="all"]').count():
+                    page.select_option('#stream-channel', 'all')
+                page.wait_for_function("document.getElementById('stream-visualization').data?.length && !document.getElementById('stream-visualization').layout.meta?.streamChannel", timeout=90000)
                 page.evaluate("""window.dispatchEvent(new CustomEvent('station-elevations', {detail: [
                     {Location:'A',Latitude:30.70,Longitude:76.70,elevation_m:100,status:'ok'},
                     {Location:'B',Latitude:30.71,Longitude:76.71,elevation_m:200,status:'ok'}]}))""")
@@ -640,6 +645,24 @@ class ChannelNetworkTests(unittest.TestCase):
         self.assertFalse(hudiara["ordered"])
         self.assertNotIn("HUDIARA DRAIN AT BRIDGE", [item["location"] for item in result["unassigned"]])
 
+    def test_aliases_and_local_names(self):
+        from opengeostreams.opengeostreams import network
+        self.assertEqual(network.canonical_name("Attawa Choa"), "N-Choe")
+        self.assertEqual(network.canonical_name("Budha Nallah"), "Budha Nallah")
+        with tempfile.TemporaryDirectory() as folder:
+            aliases = Path(folder) / "aliases.csv"
+            aliases.write_text("alias,name\nOld Test Drain,Test Drain\n", encoding="utf-8")
+            with patch.dict(os.environ, {"OPENGEOSTREAMS_ALIASES": str(aliases)}):
+                self.assertEqual(network.canonical_name("Old Test Drain"), "Test Drain")
+        # Labels never use the WRIS name, so the local name is shown (like WRIS "Tangori Choe" = N-choe).
+        rows = [("LOCAL CHOE AT BRIDGE", 30.0005, 76.05), ("SITE 2", 30.0005, 76.12), ("SITE 3", 30.0005, 76.15)]
+        frame = pd.DataFrame([{"Parameter": "pH", "Value": 7, "Location": name, "Latitude": lat, "Longitude": lon,
+                               "Date": "01-01-2024"} for name, lat, lon in rows])
+        result = network.build_channel_network(frame, network=self.network())
+        channel = result["channels"][0]
+        self.assertEqual(channel["name"], "Local Choe")
+        self.assertEqual(channel["networkName"], "Test Drain")
+
     def test_terrain_elevation_decides_direction_and_labels_break_ties(self):
         from opengeostreams.opengeostreams import network
         # Make the west end the lowest: flow now runs west, away from Big River.
@@ -808,3 +831,97 @@ class StationLabelMergeTests(unittest.TestCase):
             frame.to_csv(path, index=False)
             self.assertEqual(ogs.load_csv(path, rows="all", merge_stations=False).data["Location"].nunique(), 2)
             self.assertEqual(ogs.load_csv(path, rows="all").data["Location"].nunique(), 1)
+
+
+class CombineDatasetsTests(unittest.TestCase):
+    """Combining imported files (ogs.concat) from the Python API and the dashboard."""
+
+    def frame(self, location, value, date):
+        return pd.DataFrame([{"Parameter": "pH", "Value": value, "Location": location,
+                              "Latitude": 30.7, "Longitude": 76.7, "Date": date}])
+
+    def test_concat_name_station_and_csv_round_trip(self):
+        first = ogs.from_dataframe(self.frame("NCM03 - Sector 83", 7, "01-01-2018"))
+        second = ogs.from_dataframe(self.frame("Sector 83 drain outfall", 8, "01-01-2024"))
+        combined = ogs.concat([first, second], name="sector83.csv", station="Sector 83")
+        self.assertEqual(combined.data["Location"].unique().tolist(), ["Sector 83"])
+        self.assertEqual(combined._dashboard_data["activeFile"], "sector83.csv")
+        self.assertEqual(len(first), 1)  # inputs unchanged
+        self.assertEqual(first.data["Location"].iloc[0], "NCM03 - Sector 83")
+        text = combined.to_csv()
+        self.assertTrue(text.startswith("SrNo,Parameter,Unit,Date,Value,Data Source,Location,Latitude,Longitude"))
+        again = ogs.from_dataframe(pd.read_csv(io.StringIO(text)))
+        self.assertEqual(len(again), 2)
+        with tempfile.TemporaryDirectory() as folder:
+            written = combined.to_csv(Path(folder) / "out" / "sector83.csv")
+            self.assertTrue(written.is_file())
+        with self.assertRaises(ValueError):
+            ogs.concat([first, second], station="   ")
+
+    def test_dashboard_combine_and_download(self):
+        httpd = server.create_server(port=0)
+        worker = threading.Thread(target=httpd.serve_forever, daemon=True)
+        worker.start()
+        try:
+            base = f"http://127.0.0.1:{httpd.server_address[1]}"
+            ids = []
+            for name, frame in (("a.csv", self.frame("Site A", 7, "01-01-2020")), ("b.csv", self.frame("Site B", 8, "01-01-2021"))):
+                dataset = ogs.from_dataframe(frame)
+                key = f"id-{name}"
+                httpd.datasets[key] = server.dataset_entry(dataset, name)
+                ids.append(key)
+
+            def post(body):
+                request = urllib.request.Request(f"{base}/combine-csv", data=json.dumps(body).encode(),
+                                                 headers={"Content-Type": "application/json"}, method="POST")
+                try:
+                    with urllib.request.urlopen(request) as response:
+                        return response.status, json.loads(response.read())
+                except urllib.error.HTTPError as error:
+                    return error.code, json.loads(error.read())
+
+            status, result = post({"ids": ids, "name": "both", "station": None})
+            self.assertEqual(status, 200)
+            self.assertEqual(result["fileName"], "both.csv")
+            self.assertEqual(result["summary"]["recordCount"], 2)
+            self.assertEqual(result["summary"]["combinedFrom"], ["a.csv", "b.csv"])
+            self.assertEqual(httpd.active_dataset, result["id"])
+            status, single = post({"ids": ids, "name": "", "station": "One site"})
+            self.assertEqual(status, 200)
+            self.assertEqual(single["summary"]["locationCount"], 1)
+            self.assertTrue(single["fileName"].startswith("combined_"))
+            self.assertEqual(post({"ids": ids[:1]})[0], 400)
+            self.assertEqual(post({"ids": [ids[0], ids[0]]})[0], 400)
+            self.assertEqual(post({"ids": ids + ["missing"]})[0], 400)
+            self.assertEqual(post({"ids": ids, "station": " "})[0], 400)
+            with urllib.request.urlopen(f"{base}/api/download?id={result['id']}") as response:
+                self.assertIn('filename="both.csv"', response.headers["Content-Disposition"])
+                rows = response.read().decode().splitlines()
+            self.assertEqual(len(rows), 3)
+            self.assertTrue(rows[0].startswith("SrNo,Parameter"))
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            worker.join()
+
+
+class FastKrigingTests(unittest.TestCase):
+    """The vectorised grid must match the original per-cell ordinary kriging."""
+
+    def test_vectorised_matches_per_cell(self):
+        from opengeostreams.opengeostreams import pipeline
+        rng = np.random.default_rng(7)
+        points = [{"location": f"S{index}", "latitude": 30.6 + rng.random() * 0.2,
+                   "longitude": 76.6 + rng.random() * 0.2, "value": float(rng.random() * 50)} for index in range(25)]
+        # (Stations at identical coordinates are averaged before gridding, so none here.)
+        model = pipeline.interpolation_model(points, 8.0)
+        latitudes = np.linspace(30.55, 30.85, 23)
+        longitudes = np.linspace(76.55, 76.85, 23)
+        grid_lat, grid_lon = [array.ravel() for array in np.meshgrid(latitudes, longitudes)]
+        fast = pipeline._krige_targets(points, model, grid_lat, grid_lon)
+        for lat, lon, estimate in zip(grid_lat, grid_lon, fast):
+            value, nearest = pipeline.interpolate_ordinary_kriging(points, model, {"latitude": lat, "longitude": lon})
+            if value is None or nearest is None or nearest > model["supportDistanceKm"]:
+                self.assertTrue(np.isnan(estimate))
+            else:
+                self.assertAlmostEqual(estimate, value, places=6)
