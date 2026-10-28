@@ -1,4 +1,4 @@
-"""CSV preparation and geographic interpolation for OpenGeoStreams."""
+"""CSV preparation and dashboard payloads for OpenGeoStreams (interpolation lives in ``interpolation``)."""
 
 from __future__ import annotations
 
@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
+
+try:
+    from . import qualitycheck
+except ImportError:  # run as a script: python pipeline.py
+    import qualitycheck
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 ROOT = PACKAGE_ROOT / "dashboard_assets"
@@ -32,11 +37,6 @@ MONTHS = {
     "dec": 12, "december": 12,
 }
 MONTH_LABELS = ("", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-GRID_COLUMNS = 192
-GRID_ROWS = 192
-MAX_DISTANCE_KM = 8.0
-MAX_NEIGHBORS = 8
-MIN_INTERPOLATION_POINTS = 1
 KNOWN_LOCATIONS = {
     "cpcb_2020_station2047.csv": "CPCB Station Code 2047",
     "combined_cpcb_3BRD_2018_2020.csv": "3BRD",
@@ -347,6 +347,11 @@ def number(value: Any) -> float | None:
         return None
 
 
+def display_name(location: Any) -> str:
+    """Station name as the dashboard shows it."""
+    return clean(location).replace("parK", "Park")
+
+
 def location_group(location: str) -> str:
     """Preserve uploaded station identities without river-specific aliases."""
     return " ".join(clean(location).split())
@@ -371,7 +376,7 @@ def build_dashboard_data(
             else date_start.strftime("%b %Y") if date_precision == "month"
             else str(date_start.year)
         )
-        display_location = clean(row.get("Location")).replace("parK", "Park")
+        display_location = display_name(row.get("Location"))
         group = location_group(display_location)
         latitude, longitude = number(row.get("Latitude")), number(row.get("Longitude"))
         raw_value = clean(row.get("Value"))
@@ -410,6 +415,7 @@ def build_dashboard_data(
         "locations": location_list,
         "records": records,
         "analytics": {"boxplots": build_boxplot_statistics(records)},
+        "quality": qualitycheck.build_quality_payload(records),
     }
 
 
@@ -435,6 +441,7 @@ def empty_dashboard_data() -> dict[str, Any]:
         "locations": [],
         "records": [],
         "analytics": {"boxplots": []},
+        "quality": qualitycheck.build_quality_payload([]),
     }
 
 
@@ -491,266 +498,6 @@ def build_boxplot_statistics(records: list[dict[str, Any]]) -> list[dict[str, An
     return sorted(statistics, key=lambda item: (
         item["location"], item["parameter"], item["grouping"], item["key"]
     ))
-
-
-def distance_km(left: dict[str, Any], right: dict[str, Any]) -> float:
-    radius = 6371.0
-    lat1, lat2 = math.radians(left["latitude"]), math.radians(right["latitude"])
-    delta_lat = math.radians(right["latitude"] - left["latitude"])
-    delta_lon = math.radians(right["longitude"] - left["longitude"])
-    value = math.sin(delta_lat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
-    return radius * 2 * math.atan2(math.sqrt(value), math.sqrt(max(0.0, 1 - value)))
-
-
-def interpolation_model(points: list[dict[str, Any]], max_distance_km: float = MAX_DISTANCE_KM) -> dict[str, float]:
-    values = np.asarray([point["value"] for point in points], dtype=float)
-    sample_variance = float(np.var(values, ddof=1)) if len(values) > 1 else 0.0
-    total_sill = sample_variance if sample_variance > 0 else max(abs(float(np.mean(values))) * 0.01, 1.0)
-    latitudes = [point["latitude"] for point in points]
-    longitudes = [point["longitude"] for point in points]
-    distances = _haversine_km(latitudes, longitudes, latitudes, longitudes)
-    pair_distances = distances[np.triu_indices(len(points), k=1)].tolist()
-    if len(points) > 1:
-        np.fill_diagonal(distances, np.inf)
-        nearest = distances.min(axis=1).tolist()
-    else:
-        nearest = []
-    positive_nearest = [value for value in nearest if value > 0]
-    average_nearest = (
-        sum(positive_nearest) / len(positive_nearest)
-        if positive_nearest else max_distance_km / 1.75
-    )
-    nugget = total_sill * 0.05
-    return {
-        "maxDistanceKm": max_distance_km,
-        "rangeKm": max(max(pair_distances, default=0.0) * 0.6, 0.75),
-        "supportDistanceKm": min(max_distance_km, max(average_nearest * 1.75, 0.9)),
-        "nugget": nugget,
-        "partialSill": max(total_sill - nugget, total_sill * 0.25),
-        "sill": nugget + max(total_sill - nugget, total_sill * 0.25),
-    }
-
-
-def covariance(distance: float, model: dict[str, float]) -> float:
-    if distance <= 0:
-        return model["sill"]
-    return model["partialSill"] * math.exp(-((distance / model["rangeKm"]) ** 2))
-
-
-def interpolate_ordinary_kriging(points: list[dict[str, Any]], model: dict[str, float], target: dict[str, float]) -> tuple[float | None, float | None]:
-    neighbors = sorted(((distance_km(point, target), point) for point in points), key=lambda item: item[0])
-    if neighbors and neighbors[0][0] > model["supportDistanceKm"]:
-        return None, neighbors[0][0]
-    if neighbors and neighbors[0][0] < 0.0001:
-        return neighbors[0][1]["value"], 0.0
-    nearby = [item for item in neighbors if item[0] <= model["maxDistanceKm"]][:MAX_NEIGHBORS]
-    if len(nearby) < MIN_INTERPOLATION_POINTS:
-        nearby = neighbors[:MAX_NEIGHBORS]
-    if len(nearby) < MIN_INTERPOLATION_POINTS:
-        return None, nearby[0][0] if nearby else None
-    size = len(nearby)
-    matrix = np.zeros((size + 1, size + 1), dtype=float)
-    vector = np.zeros(size + 1, dtype=float)
-    for row in range(size):
-        for column in range(size):
-            matrix[row, column] = covariance(distance_km(nearby[row][1], nearby[column][1]), model)
-        matrix[row, size] = matrix[size, row] = 1.0
-        vector[row] = covariance(nearby[row][0], model)
-    vector[size] = 1.0
-    try:
-        weights = np.linalg.solve(matrix, vector)[:size]
-        value = float(sum(weights[index] * nearby[index][1]["value"] for index in range(size)))
-        if not math.isfinite(value) or abs(value) > 1e15:
-            raise np.linalg.LinAlgError
-    except np.linalg.LinAlgError:
-        inverse = [1 / max(item[0], 0.001) ** 2 for item in nearby]
-        value = sum(weight * item[1]["value"] for weight, item in zip(inverse, nearby)) / sum(inverse)
-    return value, nearby[0][0]
-
-
-def load_river_mask(path: Path | None = None) -> dict[str, Any] | None:
-    if path is None:
-        return None
-    path = Path(path)
-    if not path.is_file():
-        raise ValueError(f"River mask file not found: {path}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if payload.get("rows") != GRID_ROWS or payload.get("cols") != GRID_COLUMNS:
-        raise ValueError("River mask dimensions do not match the interpolation grid.")
-    if len(payload.get("maskValues", [])) != GRID_ROWS * GRID_COLUMNS:
-        raise ValueError("River mask has an invalid number of cells.")
-    return payload
-
-
-def interpolation_extent(records: list[dict[str, Any]], river_mask: dict[str, Any] | None) -> dict[str, float] | None:
-    if river_mask:
-        return river_mask["extent"]
-    mapped = [record for record in records if record["hasCoordinates"]]
-    if not mapped:
-        return None
-    latitudes = [record["latitude"] for record in mapped]
-    longitudes = [record["longitude"] for record in mapped]
-    lat_span, lon_span = max(max(latitudes) - min(latitudes), 0.01), max(max(longitudes) - min(longitudes), 0.01)
-    return {"minLatitude": max(-90, min(latitudes) - lat_span * 0.08), "maxLatitude": min(90, max(latitudes) + lat_span * 0.08),
-            "minLongitude": max(-180, min(longitudes) - lon_span * 0.08), "maxLongitude": min(180, max(longitudes) + lon_span * 0.08)}
-
-
-def _haversine_km(lat1, lon1, lat2, lon2) -> np.ndarray:
-    """Great-circle distances (km) between two sets of points, as a len(1) x len(2) matrix."""
-    lat1 = np.radians(np.asarray(lat1, dtype=float))[:, None]
-    lat2 = np.radians(np.asarray(lat2, dtype=float))[None, :]
-    delta_lat = lat2 - lat1
-    delta_lon = np.radians(np.asarray(lon2, dtype=float))[None, :] - np.radians(np.asarray(lon1, dtype=float))[:, None]
-    value = np.sin(delta_lat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(delta_lon / 2) ** 2
-    return 6371.0 * 2 * np.arctan2(np.sqrt(value), np.sqrt(np.maximum(0.0, 1 - value)))
-
-
-def _covariance_array(distances: np.ndarray, model: dict[str, float]) -> np.ndarray:
-    result = model["partialSill"] * np.exp(-((distances / model["rangeKm"]) ** 2))
-    return np.where(distances <= 0, model["sill"], result)
-
-
-def _krige_targets(points: list[dict[str, Any]], model: dict[str, float], target_lat: np.ndarray,
-                   target_lon: np.ndarray, chunk: int = 2048) -> np.ndarray:
-    """Vectorised ``interpolate_ordinary_kriging`` for many targets (same rules and fallbacks).
-
-    Returns estimates (NaN where there is no estimate within the support distance).
-    """
-    point_lat = np.array([point["latitude"] for point in points], dtype=float)
-    point_lon = np.array([point["longitude"] for point in points], dtype=float)
-    point_values = np.array([point["value"] for point in points], dtype=float)
-    point_distances = _haversine_km(point_lat, point_lon, point_lat, point_lon)
-    count = len(points)
-    estimates = np.full(len(target_lat), np.nan)
-    for begin in range(0, len(target_lat), chunk):
-        stop = min(begin + chunk, len(target_lat))
-        distances = _haversine_km(target_lat[begin:stop], target_lon[begin:stop], point_lat, point_lon)
-        order = np.argsort(distances, axis=1, kind="stable")
-        ordered = np.take_along_axis(distances, order, axis=1)
-        nearest = ordered[:, 0]
-        usable = nearest <= model["supportDistanceKm"]
-        exact = usable & (nearest < 0.0001)
-        estimates[begin:stop][exact] = point_values[order[exact, 0]]
-        within = (ordered <= model["maxDistanceKm"]).sum(axis=1)
-        sizes = np.minimum(within, MAX_NEIGHBORS)
-        sizes = np.where(sizes < MIN_INTERPOLATION_POINTS, min(count, MAX_NEIGHBORS), sizes)
-        solve = usable & ~exact & (sizes >= MIN_INTERPOLATION_POINTS)
-        for size in np.unique(sizes[solve]):
-            rows = np.nonzero(solve & (sizes == size))[0]
-            neighbours = order[rows, :size]                       # (m, size)
-            neighbour_distances = ordered[rows, :size]
-            matrix = np.ones((len(rows), size + 1, size + 1))
-            matrix[:, :size, :size] = _covariance_array(point_distances[neighbours[:, :, None], neighbours[:, None, :]], model)
-            matrix[:, size, size] = 0.0
-            vector = np.ones((len(rows), size + 1))
-            vector[:, :size] = _covariance_array(neighbour_distances, model)
-            values = point_values[neighbours]
-            try:
-                weights = np.linalg.solve(matrix, vector[..., None])[..., 0][:, :size]
-                result = (weights * values).sum(axis=1)
-            except np.linalg.LinAlgError:
-                result = np.full(len(rows), np.nan)
-                for item in range(len(rows)):
-                    try:
-                        result[item] = float(np.linalg.solve(matrix[item], vector[item])[:size] @ values[item])
-                    except np.linalg.LinAlgError:
-                        result[item] = np.nan
-            bad = ~np.isfinite(result) | (np.abs(result) > 1e15)
-            if bad.any():
-                inverse = 1 / np.maximum(neighbour_distances[bad], 0.001) ** 2
-                result[bad] = (inverse * values[bad]).sum(axis=1) / inverse.sum(axis=1)
-            estimates[begin + rows] = result
-    return estimates
-
-
-def build_interpolation_grid(points: list[dict[str, Any]], extent: dict[str, float], river_mask: dict[str, Any] | None, max_distance_km: float = MAX_DISTANCE_KM) -> dict[str, Any]:
-    model = interpolation_model(points, max_distance_km)
-    values: list[float | None] = [None] * (GRID_ROWS * GRID_COLUMNS)
-    active = {index for index, weight in enumerate(river_mask["maskValues"]) if float(weight or 0) > 0} if river_mask else set(range(len(values)))
-    lat_step = (extent["maxLatitude"] - extent["minLatitude"]) / (GRID_ROWS - 1)
-    lon_step = (extent["maxLongitude"] - extent["minLongitude"]) / (GRID_COLUMNS - 1)
-    # Always anchor observed samples even when the narrow river mask misses their cell.
-    for point in points:
-        row = round((extent["maxLatitude"] - point["latitude"]) / lat_step)
-        column = round((point["longitude"] - extent["minLongitude"]) / lon_step)
-        for row_offset in (-1, 0, 1):
-            for column_offset in (-1, 0, 1):
-                next_row, next_column = row + row_offset, column + column_offset
-                if 0 <= next_row < GRID_ROWS and 0 <= next_column < GRID_COLUMNS:
-                    active.add(next_row * GRID_COLUMNS + next_column)
-    cells = np.array(sorted(active), dtype=int)
-    if len(cells):
-        rows, columns = np.divmod(cells, GRID_COLUMNS)
-        estimates = _krige_targets(points, model, extent["maxLatitude"] - rows * lat_step,
-                                   extent["minLongitude"] + columns * lon_step)
-        for index, value in zip(cells.tolist(), estimates.tolist()):
-            if math.isfinite(value):
-                values[index] = round(value, 4)
-    for point in points:
-        row = max(0, min(GRID_ROWS - 1, round((extent["maxLatitude"] - point["latitude"]) / lat_step)))
-        column = max(0, min(GRID_COLUMNS - 1, round((point["longitude"] - extent["minLongitude"]) / lon_step)))
-        values[row * GRID_COLUMNS + column] = round(point["value"], 4)
-    return {"extent": extent, "columns": GRID_COLUMNS, "rows": GRID_ROWS, "maxDistanceKm": max_distance_km,
-            "variogram": {key: round(value, 6) for key, value in model.items()},
-            "riverMaskApplied": river_mask is not None, "values": values}
-
-
-def collect_interpolation_surfaces(records: list[dict[str, Any]], extent: dict[str, float], river_mask: dict[str, Any] | None, yearly: bool, max_distance_km: float = MAX_DISTANCE_KM) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for record in records:
-        if record["hasCoordinates"] and record["numericValue"] is not None and record["parameter"]:
-            period = str(record["year"]) if yearly else "all_years"
-            grouped[(period, parameter_family(record["parameter"]))].append(record)
-    surfaces = []
-    for (period, parameter), group in grouped.items():
-        by_location: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for record in group:
-            by_location[(record["latitude"], record["longitude"])].append(record)
-        points = [{"location": samples[0]["locationGroup"], "latitude": samples[0]["latitude"], "longitude": samples[0]["longitude"],
-                   "value": sum(sample["numericValue"] for sample in samples) / len(samples), "sampleCount": len(samples)}
-                  for location, samples in by_location.items()]
-        if len(points) < MIN_INTERPOLATION_POINTS:
-            continue
-        points.sort(key=lambda point: point["location"])
-        surfaces.append({"id": re.sub(r"[^a-z0-9]+", "-", f"{period}:{parameter}".lower()).strip("-"),
-                         "parameter": parameter, "parameterFamily": parameter, "unit": clean(group[0]["unit"]),
-                         "year": None if period == "all_years" else int(period), "period": period,
-                         "method": "Ordinary Kriging" if len(points) > 1 else "Single-station value (no spatial interpolation)",
-                         "pointCount": len(points), "samplePoints": points,
-                         "grid": build_interpolation_grid(points, interpolation_extent(group, river_mask), river_mask, max_distance_km)})
-    return sorted(surfaces, key=lambda surface: (str(surface["period"]), surface["parameter"]))
-
-
-def build_interpolation_data(dashboard_data: dict[str, Any], output_path: Path | None = None, *, max_distance_km: float = MAX_DISTANCE_KM, river_mask_path: Path | None = None, river_mask: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Generate all-year and yearly ordinary-kriging surfaces in Python."""
-    if isinstance(max_distance_km, bool) or not isinstance(max_distance_km, (int, float)) or not math.isfinite(max_distance_km) or max_distance_km <= 0:
-        raise ValueError("max_distance_km must be a positive finite number.")
-    records = dashboard_data.get("records", [])
-    if river_mask_path is not None:
-        river_mask = load_river_mask(river_mask_path)
-    if river_mask:
-        boundary = river_mask["extent"]
-        if any(record["hasCoordinates"] and not (
-            boundary["minLatitude"] <= record["latitude"] <= boundary["maxLatitude"] and
-            boundary["minLongitude"] <= record["longitude"] <= boundary["maxLongitude"]
-        ) for record in records):
-            raise ValueError("The supplied river mask does not cover all mapped stations.")
-    extent = interpolation_extent(records, river_mask)
-    payload = {"generatedAt": datetime.now().isoformat(timespec="seconds"),
-               "sourceRecordCount": len(records), "mappedLocationCount": dashboard_data["summary"]["mappedLocationCount"],
-               "method": {"type": "Ordinary Kriging", "variogramModel": "gaussian", "maxDistanceKm": max_distance_km,
-                          "maxNeighbors": MAX_NEIGHBORS, "nuggetRatio": 0.05, "gridColumns": GRID_COLUMNS,
-                          "gridRows": GRID_ROWS, "minimumPointCount": MIN_INTERPOLATION_POINTS},
-               "extent": extent,
-               "riverMask": ({"generatedFrom": river_mask.get("generatedFrom"), "activeCellCount": river_mask.get("activeCellCount"),
-                              "widthStats": river_mask.get("widthStats")} if river_mask else None),
-               "surfaces": {"allYears": [], "yearly": []}}
-    if records and extent is not None:
-        payload["surfaces"]["allYears"] = collect_interpolation_surfaces(records, extent, river_mask, False, max_distance_km)
-        payload["surfaces"]["yearly"] = collect_interpolation_surfaces(records, extent, river_mask, True, max_distance_km)
-    if output_path is not None:
-        output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    return payload
 
 
 if __name__ == "__main__":

@@ -3034,3 +3034,28 @@ body.is-busy .map-area::after {
     animation: none !important;
   }
 }
+
+/* Lower / Upper switch for interval (Min/Max) interpolation maps */
+.interp-bound {
+  justify-self: start;
+  margin-top: 2px;
+}
+
+.interp-bound[hidden] {
+  display: none;
+}
+
+/* Station pins: transparent wrapper with a soft drop shadow under the SVG teardrop. */
+.station-pin {
+  background: none;
+  border: 0;
+}
+.station-pin svg {
+  display: block;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+  transition: transform 0.12s ease;
+  transform-origin: 50% 100%;
+}
+.station-pin:hover svg {
+  transform: scale(1.1);
+}

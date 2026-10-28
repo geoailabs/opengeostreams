@@ -6,6 +6,7 @@ import csv
 import tempfile
 import threading
 import webbrowser
+from collections import Counter
 from itertools import islice
 from pathlib import Path
 from typing import Any, Iterable
@@ -205,45 +206,48 @@ class RiverDataset:
             frame = frame[frame["Parameter"].astype(str).str.casefold() == pipeline.normalize_parameter(parameter).casefold()]
         return frame.groupby("Parameter")["NumericValue"].describe()
 
-    def interpolate(self, *, max_distance_km: float = 8.0, river_mask_path: str | Path | None = None,
-                    follow_rivers: bool = True) -> tuple["RiverDataset", dict[str, Any]]:
-        """Interpolate numeric measurements and return ``(data, summary)``.
+    def interpolate(self, *, max_distance_km: float | str = "auto", advanced: bool = False,
+                    junction_weights: str = "auto", power: float = 2.0,
+                    network_path: str | Path | None = None) -> tuple["RiverDataset", dict[str, Any]]:
+        """Interpolate along the rivers and return ``(data, summary)``.
 
-        With ``follow_rivers`` (default) and no ``river_mask_path``, the surface is
-        clipped to a corridor along the drains/rivers matched by
-        :meth:`channel_network`, so values are not spread across dry land. If the
-        river network is unavailable the full rectangle is used, as before.
+        Estimates use only flow-connected stations within ``max_distance_km`` measured
+        along the channels, weighted by the share of water between them and
+        ``1 / distance ** power``. With ``max_distance_km="auto"`` (default) the limit
+        is chosen from 2, 4, 8, 16, 32 km and no limit by the smallest leave-one-out
+        error; pass a number to fix it. Without a drain/river map near the stations,
+        straight-line IDW is used and each surface carries a warning.
+        ``junction_weights`` is "auto" (catchment area when known, else equal),
+        "area", "equal" or "order". ``advanced=True`` also fits stream-network kriging
+        when there are enough stations and keeps the method with the smaller
+        leave-one-out error. ``network_path`` is your own drain/river/canal line
+        file. See :mod:`opengeostreams.interpolation` for the full method.
         """
-        river_mask = None
-        if river_mask_path is None and follow_rivers:
-            river_mask = self._network_river_mask()
-        self._interpolation = pipeline.build_interpolation_data(
-            self._dashboard_data, output_path=None, max_distance_km=max_distance_km,
-            river_mask_path=river_mask_path, river_mask=river_mask,
+        from . import interpolation
+        self._interpolation = interpolation.interpolate_dataset(
+            self, max_distance_km=max_distance_km, power=power, advanced=advanced,
+            junction_weights=junction_weights, network_path=network_path,
         )
         all_years = self._interpolation["surfaces"]["allYears"]
         yearly = self._interpolation["surfaces"]["yearly"]
+        errors = {item["parameter"]: {bound: ((item.get("runs") or {}).get(bound, {}).get("validation") or {}).get("rmse")
+                                      for bound in ("lower", "upper")} for item in all_years}
         result = {
             "method": self._interpolation["method"]["type"],
+            "networkFound": self._interpolation["network"]["found"],
+            "networkSource": self._interpolation["network"].get("source"),
             "sourceRows": self.loaded_rows,
             "mappedLocations": self._interpolation["mappedLocationCount"],
             "allYearSurfaces": len(all_years),
             "yearlySurfaces": len(yearly),
-            "parameters": sorted({item["parameter"] for item in all_years}),
+            "parameters": sorted(errors),
+            "methodsUsed": dict(sorted(Counter(item["method"] for item in all_years).items())),
+            "maxDistanceKm": self._interpolation["method"]["maxDistanceKm"],
+            "distanceChosenBy": self._interpolation["method"]["distanceSelection"]["mode"],
+            "leaveOneOutRmse": errors,
+            "warnings": sorted({item["warning"] for item in all_years + yearly if item.get("warning")}),
         }
         return self, result
-
-    def _network_river_mask(self) -> dict[str, Any] | None:
-        records = self._dashboard_data.get("records", [])
-        extent = pipeline.interpolation_extent(records, None)
-        stations = sorted({(record["latitude"], record["longitude"]) for record in records if record.get("hasCoordinates")})
-        if extent is None or not stations:
-            return None
-        try:
-            from . import network
-            return network.river_corridor_mask(self.channel_network(), extent, stations)
-        except Exception:  # geopandas or the WRIS file missing: fall back to the full rectangle
-            return None
 
     def _output(self, figure: Any, save_path: str | Path | None):
         if save_path is None:

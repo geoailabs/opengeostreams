@@ -2,7 +2,7 @@
 
 Interactive water-quality dashboard for CSV-based monitoring data from rivers. The HTML/CSS frontend uses Plotly.js for charts and Leaflet for the map.
 Opengeostreams loads CSVs into RiverDataset objects, validates and analyzes
-data, defines every Plotly chart, and computes ordinary-kriging interpolation.
+data, defines every Plotly chart, and interpolates along the river network.
 
 ## Run
 
@@ -54,11 +54,12 @@ Optional columns include `Unit`, `Data Source`, and `SrNo`.
 ```text
 Datasets/                  Source CSVs and generated consolidated CSV
 opengeostreams/opengeostreams/dashboard_assets/  Complete browser dashboard
-tools/                    River-mask utility and manual browser check
+tools/                    Manual dashboard browser check
 tests/                    Automated regression tests
 examples/                 Single Python walkthrough
 opengeostreams/opengeostreams/server.py    HTTP server, upload API, weather proxy
-opengeostreams/opengeostreams/pipeline.py  Validation, analysis, boxplots, interpolation
+opengeostreams/opengeostreams/pipeline.py  Validation, analysis, boxplots
+opengeostreams/opengeostreams/interpolation.py  Along-river interpolation
 requirements.txt           Python dependencies
 ```
 
@@ -70,9 +71,6 @@ The Python pipeline:
 - reports rows, columns, and missing values;
 - does not count a blank pH unit as missing;
 - generates boxplot five-number summaries;
-- creates all-years and yearly ordinary-kriging surfaces when at least three
-  mapped stations are available for a parameter;
-- clips interpolation to the river mask; and
 - writes browser-ready generated data.
 
 Run the pipeline directly to rebuild the consolidated project dataset:
@@ -329,25 +327,72 @@ restored dashboard continues to run without changing its workbook path.
 
 The live dashboard serves dataset JSON and interpolation through Python endpoints. Generated `dashboard_assets/dashboard-data.js` and `dashboard_assets/interpolation-data.json` snapshots are not kept in the project. Python `__pycache__` folders are retained and remain excluded from version control.
 
-## General-river interpolation
+## Along-river interpolation
 
-No bundled river mask is applied automatically. Each parameter/period uses
-its own station extent, and observations at identical coordinates are averaged
-without merging distant stations that share a name. Missing coordinates produce
-no surface. Single-station surfaces are explicitly labeled as having no spatial
-interpolation. The empty dashboard opens at a world view.
+River data is interpolated along the channels and in the direction of flow, not
+in straight lines (after Ver Hoef, Peterson & Theobald 2006 and Ver Hoef &
+Peterson 2010). It works for any river: the library picks the method from what
+each dataset has.
 
-`data.interpolate(max_distance_km=8.0)` retains an 8 km maximum support distance;
-choose an appropriate positive limit for your dataset. An optional custom mask
-can be supplied with `river_mask_path="path/to/mask.json"`; its grid dimensions
-must match and its extent must cover the stations.
+```python
+data, summary = data.interpolate()                    # distance limit chosen by the data
+data, summary = data.interpolate(max_distance_km=5)   # or a fixed limit along the river
+data, summary = data.interpolate(network_path="my_drains.gpkg", advanced=True)
+```
 
-The method uses a heuristic Gaussian covariance model and geographic distance,
-not river-network connectivity or a fitted/validated hydrological model. Nearby
-stations from different rivers are not automatically separated; import/filter
-one river at a time when this matters. Min/Max records contribute endpoint
-averages, not reconstructed original samples. The former bundled N-choe mask
-has been removed; `tools/build-river-mask.py` remains an optional custom-mask tool.
+1. **Tidy the data.** One interval per station for each parameter and period.
+   An ordinary reading is a single value; a Min/Max report (`BOD (Min)`,
+   `BOD (Max)`) is a range. Each station-year uses its ordinary readings when it
+   has any, otherwise its Min and Max, and the all-years bounds are the means of
+   the yearly bounds, so every year counts equally. Every map is then built
+   twice: a **lower** run (Min where reported) and an **upper** run (Max), so the
+   result is an interval and no range station is left out. A station with only a
+   Max counts for the upper bound only, and says so.
+2. **Find a river map.** Your own line file (`network_path` or the
+   `OPENGEOSTREAMS_NETWORK` variable) first, then India-WRIS (small drains in
+   India), then any HydroRIVERS file you put in `data/hydrorivers/`. Shapefile,
+   GeoPackage and GeoParquet line files work, including OpenStreetMap waterway
+   exports. If no map has a channel within 2 km of the stations, straight-line
+   IDW is used and every surface says so.
+3. **Pin stations to the rivers.** Each station snaps to its matched channel.
+   Natural channels drain to their outlet: the lowest channel end by terrain
+   elevation, else the direction most lines are drawn in. Canals, ditches and
+   drains marked as such keep the direction they are drawn in. A canal that
+   would make water flow in a circle is dropped. A station labelled
+   "D/S of X" within 500 m above the X junction is moved just below it.
+4. **Junctions and splits.** Where channels meet, each branch's share of the
+   water comes from its catchment area when the map has an area column
+   (HydroRIVERS `UPLAND_SKM`, MERIT `uparea`, NHDPlus `TotDASqKm`, ...),
+   otherwise both sides count equally (`junction_weights="order"` uses stream
+   order). Where a channel splits, water is shared by discharge when known,
+   else canal rank (river > main canal > branch > distributary > minor), else
+   equally.
+5. **Fill in the river.** Each river point averages the stations upstream and
+   downstream of it, weighted by the share of water that passed between them
+   divided by the squared distance along the flow path. A station on a separate
+   drain, or below a canal off-take, shares no water and never counts.
+6. **Choose the reach.** With `max_distance_km="auto"` (the default), limits of
+   2, 4, 8, 16 and 32 km and no limit are each tested by leave-one-out and the
+   smallest error wins. A station a limit cannot reach counts as the mean of
+   the others, so a short limit does not win by skipping hard cases. The
+   choice is reported in `data._interpolation["method"]["distanceSelection"]`.
+7. **Check itself.** Every station is hidden in turn and predicted from the
+   others. Each surface reports this leave-one-out error, the error of simply
+   using the average of the other stations, and a skill score (above 0 means
+   the map beats that average).
+8. **Optional extra.** With `advanced=True` and at least 50 stations on a
+   tree-shaped network (no splits), tail-up, tail-down and mixed stream-network
+   kriging are fitted too, and whichever method has the smallest leave-one-out
+   error is kept.
+9. **Show the map.** Values are coloured along the channels, faded where
+   confidence is low, with the method, reach, error and skill beside them. A
+   Lower / Upper switch picks which bound colours the map; clicking the river
+   shows the whole interval. In Python, `data.plot(parameter="BOD", bound="lower")`
+   (the default is the upper bound; `parameter="BOD (Min)"` picks the lower).
+
+Canals run in rotation and can be dry, so a canal sample reflects its source
+river only while the canal runs; surfaces that use a canal station say so.
+This is a statistical estimate along mapped channels, not a hydraulic model.
 
 
 ### All rows and Google Earth Engine elevations

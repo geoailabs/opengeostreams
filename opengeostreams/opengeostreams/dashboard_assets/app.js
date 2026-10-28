@@ -58,117 +58,16 @@
   ];
 
   // Fixed Y-axis width keeps the chart area aligned even when tick labels change.
-  // These are the four suitability modes the user can switch between.
-  const USE_CASES = [
-    { key: "human_consumption", label: "Human Consumption" },
-    { key: "agriculture", label: "Agriculture" },
-    { key: "aquatic_life", label: "Aquatic Life" },
-    { key: "bathing", label: "Bathing" },
-  ];
+  // Suitability results, use cases and safety-scale thresholds come from the Python
+  // engine (opengeostreams/qualitycheck.py) via the dashboard payload.
+  const QUALITY = dashboardData.quality || {};
+  const USE_CASES = QUALITY.useCases || [];
   // Marker colors on the map depend on the screening result for the chosen use case.
   const SUITABILITY_COLORS = {
     safe: "#16a34a",
     caution: "#d97706",
     unsafe: "#dc2626",
     unknown: "#64748b",
-  };
-  // For each use case, this maps our internal screening fields to dataset parameter names.
-  // "confirmed" means we trust that CSV field directly. "proxy" means it is only a near match.
-  const SCREENING_PARAMETER_SPECS = {
-    human_consumption: [
-      { key: "pH", confirmed: ["pH"] },
-      { key: "turbidity_ntu", confirmed: ["Turbidity"] },
-      { key: "tds_mg_l", confirmed: ["TDS"] },
-      { key: "nitrate_mg_l", confirmed: [], proxy: ["NO3-N", "Nitrate"] },
-      { key: "fluoride_mg_l", confirmed: ["Fluoride"] },
-      { key: "chloride_mg_l", confirmed: ["Chloride"] },
-      { key: "sulphate_mg_l", confirmed: ["Sulphate", "SO4"] },
-      { key: "hardness_mg_l_as_caco3", confirmed: ["TH as CaCO3"] },
-      { key: "alkalinity_mg_l_as_caco3", confirmed: ["Total alkalinity as CaCO3"], proxy: ["P-Alkalinity"] },
-      { key: "total_coliform_mpn_100ml", confirmed: ["Total Coliform", "T-Coliform"] },
-      { key: "e_coli_present", confirmed: [] },
-    ],
-    agriculture: [
-      { key: "pH", confirmed: ["pH"] },
-      { key: "ec_us_cm", confirmed: [], proxy: ["Conductivity"] },
-      { key: "sar", confirmed: [] },
-      { key: "boron_mg_l", confirmed: ["Boron(B)"] },
-      { key: "chloride_mg_l", confirmed: ["Chloride"] },
-      { key: "nitrate_mg_l", confirmed: [], proxy: ["NO3-N", "Nitrate"] },
-      { key: "bicarbonate_mg_l", confirmed: [] },
-      { key: "carbonate_mg_l", confirmed: [] },
-      { key: "rsc_meq_l", confirmed: [] },
-    ],
-    aquatic_life: [
-      { key: "pH", confirmed: ["pH"] },
-      { key: "dissolved_oxygen_mg_l", confirmed: ["DO"] },
-      { key: "free_ammonia_mg_l_as_n", confirmed: [], proxy: ["NH3-N"] },
-      { key: "bod_mg_l", confirmed: ["BOD"] },
-      { key: "nitrate_mg_l", confirmed: [], proxy: ["NO3-N", "Nitrate"] },
-      { key: "phosphate_mg_l", confirmed: ["Phosphate"], proxy: ["Phosphate-P"] },
-      { key: "turbidity_ntu", confirmed: ["Turbidity"] },
-      { key: "temperature_c", confirmed: ["Temperature"] },
-    ],
-    bathing: [
-      { key: "pH", confirmed: ["pH"] },
-      { key: "dissolved_oxygen_mg_l", confirmed: ["DO"] },
-      { key: "bod_mg_l", confirmed: ["BOD"] },
-      { key: "total_coliform_mpn_100ml", confirmed: ["Total Coliform", "T-Coliform"] },
-      { key: "fecal_coliform_mpn_100ml", confirmed: ["Faecal Coliform"] },
-      { key: "turbidity_ntu", confirmed: ["Turbidity"] },
-      { key: "e_coli_present", confirmed: [] },
-    ],
-  };
-  // Core keys are the minimum checks needed before we can confidently classify a site.
-  const CORE_KEYS_BY_USE_CASE = {
-    human_consumption: ["pH", "turbidity_ntu", "tds_mg_l", "nitrate_mg_l", "fluoride_mg_l", "total_coliform_mpn_100ml", "e_coli_present"],
-    agriculture: ["pH", "ec_us_cm", "sar", "boron_mg_l"],
-    aquatic_life: ["pH", "dissolved_oxygen_mg_l", "free_ammonia_mg_l_as_n"],
-    bathing: ["pH", "dissolved_oxygen_mg_l", "bod_mg_l", "total_coliform_mpn_100ml", "fecal_coliform_mpn_100ml", "e_coli_present"],
-  };
-  // Threshold metadata for the parameter safety scale panel.
-  const PARAMETER_SCALE_DEFINITIONS = {
-    human_consumption: {
-      ph: { label: "pH", type: "range", safeMin: 6.5, safeMax: 8.5, domainMin: 0, domainMax: 14 },
-      turbidity: { label: "Turbidity", type: "max", safeMax: 1.0, unit: "NTU" },
-      tds: { label: "TDS", type: "max", safeMax: 500, unit: "mg/L" },
-      nitrate: { label: "Nitrate", type: "max", safeMax: 45, unit: "mg/L" },
-      fluoride: { label: "Fluoride", type: "max", safeMax: 1.0, unit: "mg/L" },
-      chloride: { label: "Chloride", type: "max", safeMax: 250, unit: "mg/L" },
-      sulphate: { label: "Sulphate", type: "max", safeMax: 200, unit: "mg/L" },
-      hardness: { label: "Hardness", type: "max", safeMax: 200, unit: "mg/L as CaCO3" },
-      alkalinity: { label: "Alkalinity", type: "max", safeMax: 200, unit: "mg/L as CaCO3" },
-      total_coliform: { label: "Total Coliform", type: "max", safeMax: 0, unit: "MPN/100mL", domainMin: 0, domainMax: 1000 },
-    },
-    agriculture: {
-      ph: { label: "pH", type: "range", safeMin: 6.0, safeMax: 8.5, domainMin: 0, domainMax: 14 },
-      conductivity: { label: "Conductivity", type: "max", safeMax: 2250, unit: "uS/cm" },
-      boron: { label: "Boron", type: "max", safeMax: 2.0, unit: "mg/L", domainMin: 0, domainMax: 4 },
-      chloride: { label: "Chloride", type: "max", safeMax: 140, unit: "mg/L" },
-      nitrate: { label: "Nitrate", type: "max", safeMax: 30, unit: "mg/L" },
-    },
-    aquatic_life: {
-      ph: { label: "pH", type: "range", safeMin: 6.5, safeMax: 8.5, domainMin: 0, domainMax: 14 },
-      do: { label: "Dissolved Oxygen", type: "min", safeMin: 4.0, unit: "mg/L", domainMin: 0, domainMax: 10 },
-      ammonia: { label: "Free Ammonia", type: "max", safeMax: 1.2, unit: "mg/L as N", domainMin: 0, domainMax: 3 },
-      bod: { label: "BOD", type: "max", safeMax: 3.0, unit: "mg/L", domainMin: 0, domainMax: 10 },
-      nitrate: { label: "Nitrate", type: "max", safeMax: 10, unit: "mg/L" },
-      phosphate: { label: "Phosphate", type: "max", safeMax: 0.1, unit: "mg/L", domainMin: 0, domainMax: 1 },
-      turbidity: { label: "Turbidity", type: "max", safeMax: 25, unit: "NTU" },
-      temperature: { label: "Temperature", type: "max", safeMax: 32, unit: "°C", domainMin: 0, domainMax: 40 },
-    },
-    bathing: {
-      ph: { label: "pH", type: "range", safeMin: 6.5, safeMax: 8.5, domainMin: 0, domainMax: 14 },
-      do: { label: "Dissolved Oxygen", type: "min", safeMin: 5.0, unit: "mg/L", domainMin: 0, domainMax: 10 },
-      bod: { label: "BOD", type: "max", safeMax: 3.0, unit: "mg/L", domainMin: 0, domainMax: 10 },
-      total_coliform: { label: "Total Coliform", type: "max", safeMax: 0, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
-      fecal_coliform: { label: "Faecal Coliform", type: "max", safeMax: 0, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
-      turbidity: { label: "Turbidity", type: "max", safeMax: 10, unit: "NTU" },
-    },
-  };
-  const GLOBAL_PARAMETER_SCALE_DEFINITIONS = {
-    total_coliform: { label: "Total Coliform", type: "max", safeMax: 0, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
-    fecal_coliform: { label: "Faecal Coliform", type: "max", safeMax: 0, unit: "MPN/100mL", domainMin: 0, domainMax: 2000 },
   };
   const PARAMETER_DESCRIPTIONS = {
     "BOD": "Oxygen used by microbes to break down organic matter.",
@@ -278,6 +177,7 @@
   let interpolationData = null;
   let interpolationOverlay = null;
   let interpolationEnabled = true;
+  let interpolationBound = "upper";
   let interpolationRequest = null;
 
   function clearLibraryFigure(kind, element, empty, message) {
@@ -1044,6 +944,15 @@
     refreshInterpolationOverlay();
   });
 
+  // Lower / Upper switch for maps built from Min/Max ranges.
+  document.getElementById("interp-bound")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-interp-bound]");
+    if (!button || button.dataset.interpBound === interpolationBound) return;
+    interpolationBound = button.dataset.interpBound;
+    map.closePopup();
+    refreshInterpolationOverlay();
+  });
+
   function refreshBaseMapButtons() {
     els.basemapToggle.querySelectorAll("[data-basemap]").forEach((button) => {
       button.classList.toggle("is-active", button.dataset.basemap === state.baseMap);
@@ -1099,12 +1008,13 @@
   // Create one clickable marker per mapped location.
   mappedLocations.forEach((location) => {
     const isStp = isSewageTreatmentPlant(location.name);
-    const marker = L.circleMarker([location.latitude, location.longitude], {
-      radius: 8,
-      weight: 2,
-      color: readCssColour("--marker-ring", "#ffffff"),
-      fillColor: isStp ? "#d99d06" : "#0f766e",
-      fillOpacity: 0.92,
+    const marker = L.marker([location.latitude, location.longitude], {
+      icon: stationPinIcon({
+        fill: isStp ? "#d99d06" : "#0f766e",
+        ring: readCssColour("--marker-ring", "#ffffff"),
+        active: false,
+      }),
+      riseOnHover: true,
     }).addTo(map);
 
     // Popup HTML is built only when a popup opens (not for every marker on every refresh).
@@ -1128,15 +1038,28 @@
     const periodLabel = estimate.surface.year == null
       ? "All available years"
       : String(estimate.surface.year);
+    const run = getInterpolationRun(estimate.surface);
+    const error = (run.validation || estimate.surface.validation)?.rmse;
+    const unit = estimate.surface.unit ? ` ${estimate.surface.unit}` : "";
+    const sameBounds = estimate.lower != null && estimate.upper != null && Math.abs(estimate.upper - estimate.lower) < 1e-9;
+    const valueText = sameBounds || !estimate.surface.interval
+      ? formatCompactNumber(estimate.value ?? estimate.upper ?? estimate.lower)
+      : `${estimate.lower == null ? "?" : formatCompactNumber(estimate.lower)} to ${estimate.upper == null ? "?" : formatCompactNumber(estimate.upper)}`;
     L.popup({ className: "interpolation-value-popup", maxWidth: 260 })
       .setLatLng(event.latlng)
       .setContent([
         '<div class="interpolation-estimate">',
         '<strong>Interpolated estimate</strong>',
         `<span>${escapeHtml(estimate.surface.parameterFamily || estimate.surface.parameter)}</span>`,
-        `<b>${escapeHtml(formatCompactNumber(estimate.value))}${estimate.surface.unit ? ` ${escapeHtml(estimate.surface.unit)}` : ""}</b>`,
+        `<b>${escapeHtml(valueText)}${estimate.surface.unit ? ` ${escapeHtml(estimate.surface.unit)}` : ""}</b>`,
+        estimate.surface.interval && !sameBounds ? "<small>Lower bound uses Min readings, upper bound uses Max readings where only a range was reported.</small>" : "",
         `<small>Period: ${escapeHtml(periodLabel)}</small>`,
-        '<small>Estimated by Python ordinary kriging; this is not an observed sample.</small>',
+        estimate.confidence == null ? "" : `<small>Confidence: ${escapeHtml(String(estimate.confidence))}%</small>`,
+        Number.isFinite(error)
+          ? `<small>Typical error (leave-one-out): ±${escapeHtml(formatCompactNumber(error))}${escapeHtml(unit)}</small>`
+          : "",
+        `<small>${escapeHtml(run.method || estimate.surface.method)}; this is an estimate, not an observed sample.</small>`,
+        estimate.surface.warning ? `<small>⚠ ${escapeHtml(estimate.surface.warning)}</small>` : "",
         '</div>',
       ].join(""))
       .openOn(map);
@@ -1241,31 +1164,22 @@
     return selectedMonth ? `${selectedMonth.label} within ${yearLabel}` : yearLabel;
   }
 
-  // Run the rule-based screening engine for one location under the current filters/use case.
+  // Look up the screening result computed by qualitycheck.py for the sample matching the current filters/use case.
   function evaluateLocationSuitability(locationName) {
-    const sampleRecords = getSuitabilitySampleRecords(locationName);
-    if (!sampleRecords.length) {
+    const sample = getSuitabilitySampleRecords(locationName)[0];
+    const evaluation = sample && QUALITY.samples?.[locationName]?.[`${sample.fileName}|${sample.sortKey}`]?.[state.selectedUseCase];
+    if (!evaluation) {
       return {
         status: "unknown",
-        label: "Insufficient data",
+        label: QUALITY.statusLabels?.unknown || "Insufficient data",
         reasons: ["No sample matches the current timeline filter."],
-        result: null,
         sampleLabel: getSuitabilityFilterLabel(),
       };
     }
 
-    const inputBundle = extractScreeningInputs(sampleRecords, state.selectedUseCase);
-    const checkedValues = inputBundle.values;
-    const result = runUseCaseScreening(state.selectedUseCase, checkedValues);
-    const status = determineSuitabilityStatus(state.selectedUseCase, result);
-
     return {
-      status,
-      label: formatSuitabilityStatus(status),
-      reasons: [...result.core_reasons, ...result.extended_reasons],
-      result,
-      sampleLabel: sampleRecords[0]?.dateLabel || getSuitabilityFilterLabel(),
-      coverage: inputBundle.coverage,
+      ...evaluation,
+      sampleLabel: sample.dateLabel || getSuitabilityFilterLabel(),
     };
   }
 
@@ -1297,191 +1211,6 @@
     });
 
     return sortedEntries[0]?.[1] || [];
-  }
-
-  // Pull only the values needed for the selected use case out of the raw sample rows.
-  function extractScreeningInputs(records, useCase) {
-    const specs = SCREENING_PARAMETER_SPECS[useCase] || [];
-    const values = {
-      pH: null,
-      turbidity_ntu: null,
-      tds_mg_l: null,
-      nitrate_mg_l: null,
-      fluoride_mg_l: null,
-      chloride_mg_l: null,
-      sulphate_mg_l: null,
-      hardness_mg_l_as_caco3: null,
-      alkalinity_mg_l_as_caco3: null,
-      total_coliform_mpn_100ml: null,
-      fecal_coliform_mpn_100ml: null,
-      e_coli_present: null,
-      ec_us_cm: null,
-      sar: null,
-      boron_mg_l: null,
-      bicarbonate_mg_l: null,
-      carbonate_mg_l: null,
-      rsc_meq_l: null,
-      dissolved_oxygen_mg_l: null,
-      free_ammonia_mg_l_as_n: null,
-      bod_mg_l: null,
-      phosphate_mg_l: null,
-      temperature_c: null,
-    };
-    const coverage = {
-      confirmed: [],
-      proxy: [],
-      missing: [],
-    };
-
-    // For each required field, prefer confirmed aliases; fall back to proxy coverage reporting.
-    specs.forEach((spec) => {
-      const confirmedMatch = getParameterMatch(records, spec.confirmed || []);
-      if (confirmedMatch) {
-        values[spec.key] = confirmedMatch.numericValue;
-        coverage.confirmed.push(getCoverageLabel(spec.key, confirmedMatch.parameter));
-        return;
-      }
-
-      const proxyMatch = getParameterMatch(records, spec.proxy || []);
-      if (proxyMatch) {
-        coverage.proxy.push(getCoverageLabel(spec.key, proxyMatch.parameter));
-        return;
-      }
-
-      coverage.missing.push(getCoverageLabel(spec.key));
-    });
-
-    return { values, coverage };
-  }
-
-  // Find the best numeric record whose parameter name matches one of the accepted aliases.
-  function getParameterMatch(records, aliases) {
-    const aliasSet = new Set(aliases.map((alias) => alias.toLowerCase()));
-    if (!aliasSet.size) {
-      return null;
-    }
-
-    const candidates = records
-      .filter((record) => aliasSet.has(getParameterFamily(record.parameter).toLowerCase()) && Number.isFinite(record.numericValue))
-      .sort((left, right) =>
-        compareParameterVariants(left.parameter, right.parameter) ||
-        right.fileName.localeCompare(left.fileName)
-      );
-
-    return candidates[0] || null;
-  }
-
-  // Turns internal screening keys into human-readable labels for the popup/detail text.
-  function getCoverageLabel(key, parameterName = "") {
-    const friendlyNames = {
-      pH: "pH",
-      turbidity_ntu: "Turbidity",
-      tds_mg_l: "TDS",
-      nitrate_mg_l: "Nitrate",
-      fluoride_mg_l: "Fluoride",
-      chloride_mg_l: "Chloride",
-      sulphate_mg_l: "Sulphate",
-      hardness_mg_l_as_caco3: "Hardness",
-      alkalinity_mg_l_as_caco3: "Alkalinity",
-      total_coliform_mpn_100ml: "Total coliform",
-      fecal_coliform_mpn_100ml: "Fecal coliform",
-      e_coli_present: "E. coli",
-      ec_us_cm: "EC",
-      sar: "SAR",
-      boron_mg_l: "Boron",
-      bicarbonate_mg_l: "Bicarbonate",
-      carbonate_mg_l: "Carbonate",
-      rsc_meq_l: "RSC",
-      dissolved_oxygen_mg_l: "DO",
-      free_ammonia_mg_l_as_n: "Free ammonia",
-      bod_mg_l: "BOD",
-      phosphate_mg_l: "Phosphate",
-      temperature_c: "Temperature",
-    };
-    const label = friendlyNames[key] || key;
-    return parameterName ? `${label} via ${parameterName}` : label;
-  }
-
-  // Dispatch to the correct screening rule set.
-  function runUseCaseScreening(useCase, values) {
-    if (useCase === "human_consumption") {
-      return fitForHumanConsumption({
-        pH: values.pH,
-        turbidity_ntu: values.turbidity_ntu,
-        tds_mg_l: values.tds_mg_l,
-        nitrate_mg_l: values.nitrate_mg_l,
-        fluoride_mg_l: values.fluoride_mg_l,
-        chloride_mg_l: values.chloride_mg_l,
-        sulphate_mg_l: values.sulphate_mg_l,
-        hardness_mg_l_as_caco3: values.hardness_mg_l_as_caco3,
-        alkalinity_mg_l_as_caco3: values.alkalinity_mg_l_as_caco3,
-        total_coliform_mpn_100ml: values.total_coliform_mpn_100ml,
-        e_coli_present: values.e_coli_present,
-        strict: true,
-      });
-    }
-
-    if (useCase === "agriculture") {
-      return fitForAgriculture({
-        pH: values.pH,
-        ec_us_cm: values.ec_us_cm,
-        sar: values.sar,
-        boron_mg_l: values.boron_mg_l,
-        chloride_mg_l: values.chloride_mg_l,
-        nitrate_mg_l: values.nitrate_mg_l,
-        bicarbonate_mg_l: values.bicarbonate_mg_l,
-        carbonate_mg_l: values.carbonate_mg_l,
-        rsc_meq_l: values.rsc_meq_l,
-      });
-    }
-
-    if (useCase === "aquatic_life") {
-      return fitForAquaticLife({
-        pH: values.pH,
-        dissolved_oxygen_mg_l: values.dissolved_oxygen_mg_l,
-        free_ammonia_mg_l_as_n: values.free_ammonia_mg_l_as_n,
-        bod_mg_l: values.bod_mg_l,
-        nitrate_mg_l: values.nitrate_mg_l,
-        phosphate_mg_l: values.phosphate_mg_l,
-        turbidity_ntu: values.turbidity_ntu,
-        temperature_c: values.temperature_c,
-      });
-    }
-
-    return fitForBathing({
-      pH: values.pH,
-      dissolved_oxygen_mg_l: values.dissolved_oxygen_mg_l,
-      bod_mg_l: values.bod_mg_l,
-      total_coliform_mpn_100ml: values.total_coliform_mpn_100ml,
-      fecal_coliform_mpn_100ml: values.fecal_coliform_mpn_100ml,
-      turbidity_ntu: values.turbidity_ntu,
-      e_coli_present: values.e_coli_present,
-    });
-  }
-
-  // Collapse the detailed screening result into a simple status used by the UI and map colors.
-  function determineSuitabilityStatus(useCase, result) {
-    const availableCoreCount = (CORE_KEYS_BY_USE_CASE[useCase] || []).filter((key) => hasCheckedValue(result.checked_values[key])).length;
-    if (!availableCoreCount) {
-      return "unknown";
-    }
-
-    if (!result.fit_core) {
-      return "unsafe";
-    }
-
-    return result.fit_extended ? "safe" : "caution";
-  }
-
-  function hasCheckedValue(value) {
-    return value !== null && value !== undefined;
-  }
-
-  function formatSuitabilityStatus(status) {
-    if (status === "safe") return "Pass";
-    if (status === "caution") return "Caution";
-    if (status === "unsafe") return "Fail";
-    return "Insufficient data";
   }
 
   // Build the HTML shown when a map marker is opened.
@@ -1856,9 +1585,9 @@
       return;
     }
 
-    const parameterKey = getParameterScaleKey(state.selectedParameter);
-    const definition = PARAMETER_SCALE_DEFINITIONS[state.selectedUseCase]?.[parameterKey]
-      || GLOBAL_PARAMETER_SCALE_DEFINITIONS[parameterKey];
+    const parameterKey = QUALITY.scaleKeys?.[state.selectedParameter];
+    const definition = QUALITY.scales?.[state.selectedUseCase]?.[parameterKey]
+      || QUALITY.globalScales?.[parameterKey];
     const useCaseLabel = USE_CASES.find((item) => item.key === state.selectedUseCase)?.label || "Selected use case";
     if (!definition) {
       els.parameterScale.innerHTML = `<div class="parameter-scale-empty">${escapeHtml(state.selectedParameter)} has no configured screening scale for ${escapeHtml(useCaseLabel.toLowerCase())}.</div>`;
@@ -1942,30 +1671,6 @@
     return trendRecords.find((record) => record.timelineKey === state.selectedTimelineKey) || trendRecords[trendRecords.length - 1];
   }
 
-  // Normalize parameter labels from the CSV into one internal key used by scale definitions.
-  function getParameterScaleKey(parameterName) {
-    const clean = String(parameterName || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    if (clean === "ph") return "ph";
-    if (clean === "turbidity") return "turbidity";
-    if (clean === "tds") return "tds";
-    if (clean === "no3 n" || clean === "nitrate") return "nitrate";
-    if (clean === "fluoride") return "fluoride";
-    if (clean === "chloride") return "chloride";
-    if (clean === "sulphate" || clean === "so4") return "sulphate";
-    if (clean === "th as caco3" || clean === "hardness") return "hardness";
-    if (clean === "total alkalinity as caco3" || clean === "p alkalinity") return "alkalinity";
-    if (clean === "conductivity") return "conductivity";
-    if (clean === "boron b" || clean === "boron") return "boron";
-    if (clean === "do" || clean === "dissolved oxygen") return "do";
-    if (clean === "nh3 n" || clean === "free ammonia") return "ammonia";
-    if (clean === "bod") return "bod";
-    if (clean === "phosphate" || clean === "phosphate p") return "phosphate";
-    if (clean === "temperature") return "temperature";
-    if (clean === "total coliform" || clean === "t coliform") return "total_coliform";
-    if (clean === "faecal coliform" || clean === "fecal coliform") return "fecal_coliform";
-    return clean.replace(/\s+/g, "_");
-  }
-
   function getParameterScaleUnit(record) {
     return record?.unit ? String(record.unit) : "";
   }
@@ -2000,6 +1705,8 @@
     return clamp(((value - domain.min) / (domain.max - domain.min || 1)) * 100, 0, 100);
   }
 
+  // Same comparison as qualitycheck.scale_status; kept here because the scale also marks
+  // yearly averages that are computed in the browser.
   function getParameterScaleStatus(definition, value) {
     if (!Number.isFinite(value)) {
       return "unknown";
@@ -2026,160 +1733,6 @@
 
   function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
-  }
-
-
-  function buildScreeningResult(useCase, fitCore, fitExtended, coreReasons, extendedReasons, checkedValues) {
-    return {
-      use_case: useCase,
-      fit_core: fitCore,
-      fit_extended: fitExtended,
-      core_reasons: coreReasons,
-      extended_reasons: extendedReasons,
-      checked_values: checkedValues,
-    };
-  }
-
-  // Screening logic for drinking-water style suitability.
-  function fitForHumanConsumption({
-    pH = null,
-    turbidity_ntu = null,
-    tds_mg_l = null,
-    nitrate_mg_l = null,
-    fluoride_mg_l = null,
-    chloride_mg_l = null,
-    sulphate_mg_l = null,
-    hardness_mg_l_as_caco3 = null,
-    alkalinity_mg_l_as_caco3 = null,
-    total_coliform_mpn_100ml = null,
-    e_coli_present = null,
-    strict = true,
-  }) {
-    const checked = {
-      pH,
-      turbidity_ntu,
-      tds_mg_l,
-      nitrate_mg_l,
-      fluoride_mg_l,
-      chloride_mg_l,
-      sulphate_mg_l,
-      hardness_mg_l_as_caco3,
-      alkalinity_mg_l_as_caco3,
-      total_coliform_mpn_100ml,
-      e_coli_present,
-      strict,
-    };
-
-    const coreReasons = [];
-    const extendedReasons = [];
-    const turbidityLimit = strict ? 1.0 : 5.0;
-    const fluorideLimit = strict ? 1.0 : 1.5;
-
-    if (pH != null && !(pH >= 6.5 && pH <= 8.5)) coreReasons.push(`pH ${pH} outside 6.5-8.5`);
-    if (turbidity_ntu != null && turbidity_ntu > turbidityLimit) coreReasons.push(`Turbidity ${turbidity_ntu} NTU exceeds ${turbidityLimit} NTU`);
-    if (tds_mg_l != null && tds_mg_l > 500) coreReasons.push(`TDS ${tds_mg_l} mg/L exceeds 500 mg/L desirable limit`);
-    if (nitrate_mg_l != null && nitrate_mg_l > 45) coreReasons.push(`Nitrate ${nitrate_mg_l} mg/L exceeds 45 mg/L`);
-    if (fluoride_mg_l != null && fluoride_mg_l > fluorideLimit) coreReasons.push(`Fluoride ${fluoride_mg_l} mg/L exceeds ${fluorideLimit} mg/L`);
-    if (total_coliform_mpn_100ml != null && total_coliform_mpn_100ml > 0) coreReasons.push(`Total coliform ${total_coliform_mpn_100ml} MPN/100mL should be 0`);
-    if (e_coli_present === true) coreReasons.push("E. coli detected");
-
-    if (chloride_mg_l != null && chloride_mg_l > 250) extendedReasons.push(`Chloride ${chloride_mg_l} mg/L exceeds 250 mg/L desirable limit`);
-    if (sulphate_mg_l != null && sulphate_mg_l > 200) extendedReasons.push(`Sulphate ${sulphate_mg_l} mg/L exceeds 200 mg/L desirable limit`);
-    if (hardness_mg_l_as_caco3 != null && hardness_mg_l_as_caco3 > 200) extendedReasons.push(`Hardness ${hardness_mg_l_as_caco3} mg/L as CaCO3 exceeds 200 mg/L desirable limit`);
-    if (alkalinity_mg_l_as_caco3 != null && alkalinity_mg_l_as_caco3 > 200) extendedReasons.push(`Alkalinity ${alkalinity_mg_l_as_caco3} mg/L as CaCO3 exceeds 200 mg/L desirable limit`);
-
-    return buildScreeningResult("human_consumption", coreReasons.length === 0, coreReasons.length === 0 && extendedReasons.length === 0, coreReasons, extendedReasons, checked);
-  }
-
-  // Screening logic for irrigation/agriculture suitability.
-  function fitForAgriculture({
-    pH = null,
-    ec_us_cm = null,
-    sar = null,
-    boron_mg_l = null,
-    chloride_mg_l = null,
-    nitrate_mg_l = null,
-    bicarbonate_mg_l = null,
-    carbonate_mg_l = null,
-    rsc_meq_l = null,
-  }) {
-    const checked = { pH, ec_us_cm, sar, boron_mg_l, chloride_mg_l, nitrate_mg_l, bicarbonate_mg_l, carbonate_mg_l, rsc_meq_l };
-    const coreReasons = [];
-    const extendedReasons = [];
-
-    if (pH != null && !(pH >= 6.0 && pH <= 8.5)) coreReasons.push(`pH ${pH} outside 6.0-8.5`);
-    if (ec_us_cm != null && ec_us_cm > 2250) coreReasons.push(`EC ${ec_us_cm} µS/cm exceeds 2250 µS/cm`);
-    if (sar != null && sar > 26) coreReasons.push(`SAR ${sar} exceeds 26`);
-    if (boron_mg_l != null && boron_mg_l > 2.0) coreReasons.push(`Boron ${boron_mg_l} mg/L exceeds 2.0 mg/L`);
-
-    if (chloride_mg_l != null && chloride_mg_l > 140) extendedReasons.push(`Chloride ${chloride_mg_l} mg/L may be restrictive for chloride-sensitive crops`);
-    if (nitrate_mg_l != null && nitrate_mg_l > 30) extendedReasons.push(`Nitrate ${nitrate_mg_l} mg/L is high for irrigation screening`);
-    if (rsc_meq_l != null && rsc_meq_l > 2.5) {
-      extendedReasons.push(`RSC ${rsc_meq_l} meq/L exceeds 2.5 meq/L`);
-    } else {
-      if (bicarbonate_mg_l != null && bicarbonate_mg_l > 610) extendedReasons.push(`Bicarbonate ${bicarbonate_mg_l} mg/L is high and may create alkalinity hazard`);
-      if (carbonate_mg_l != null && carbonate_mg_l > 120) extendedReasons.push(`Carbonate ${carbonate_mg_l} mg/L is high and may create alkalinity hazard`);
-    }
-
-    return buildScreeningResult("agriculture", coreReasons.length === 0, coreReasons.length === 0 && extendedReasons.length === 0, coreReasons, extendedReasons, checked);
-  }
-
-  // Screening logic for aquatic ecosystem health.
-  function fitForAquaticLife({
-    pH = null,
-    dissolved_oxygen_mg_l = null,
-    free_ammonia_mg_l_as_n = null,
-    bod_mg_l = null,
-    nitrate_mg_l = null,
-    phosphate_mg_l = null,
-    turbidity_ntu = null,
-    temperature_c = null,
-  }) {
-    const checked = { pH, dissolved_oxygen_mg_l, free_ammonia_mg_l_as_n, bod_mg_l, nitrate_mg_l, phosphate_mg_l, turbidity_ntu, temperature_c };
-    const coreReasons = [];
-    const extendedReasons = [];
-
-    if (pH != null && !(pH >= 6.5 && pH <= 8.5)) coreReasons.push(`pH ${pH} outside 6.5-8.5`);
-    if (dissolved_oxygen_mg_l != null && dissolved_oxygen_mg_l < 4.0) coreReasons.push(`DO ${dissolved_oxygen_mg_l} mg/L below 4.0 mg/L`);
-    if (free_ammonia_mg_l_as_n != null && free_ammonia_mg_l_as_n > 1.2) coreReasons.push(`Free ammonia ${free_ammonia_mg_l_as_n} mg/L exceeds 1.2 mg/L`);
-
-    if (bod_mg_l != null && bod_mg_l > 3.0) extendedReasons.push(`BOD ${bod_mg_l} mg/L exceeds 3.0 mg/L`);
-    if (nitrate_mg_l != null && nitrate_mg_l > 10) extendedReasons.push(`Nitrate ${nitrate_mg_l} mg/L is high for stream ecology screening`);
-    if (phosphate_mg_l != null && phosphate_mg_l > 0.1) extendedReasons.push(`Phosphate ${phosphate_mg_l} mg/L may promote eutrophication`);
-    if (turbidity_ntu != null && turbidity_ntu > 25) extendedReasons.push(`Turbidity ${turbidity_ntu} NTU is high for healthy stream habitat`);
-    if (temperature_c != null && temperature_c > 32) extendedReasons.push(`Temperature ${temperature_c}°C is stressful for many stream organisms`);
-
-    return buildScreeningResult("aquatic_life", coreReasons.length === 0, coreReasons.length === 0 && extendedReasons.length === 0, coreReasons, extendedReasons, checked);
-  }
-
-  // Screening logic for recreational/bathing suitability.
-  function fitForBathing({
-    pH = null,
-    dissolved_oxygen_mg_l = null,
-    bod_mg_l = null,
-    total_coliform_mpn_100ml = null,
-    fecal_coliform_mpn_100ml = null,
-    turbidity_ntu = null,
-    e_coli_present = null,
-  }) {
-    const checked = { pH, dissolved_oxygen_mg_l, bod_mg_l, total_coliform_mpn_100ml, fecal_coliform_mpn_100ml, turbidity_ntu, e_coli_present };
-    const coreReasons = [];
-    const extendedReasons = [];
-
-    if (pH != null && !(pH >= 6.5 && pH <= 8.5)) coreReasons.push(`pH ${pH} outside 6.5-8.5`);
-    if (dissolved_oxygen_mg_l != null && dissolved_oxygen_mg_l < 5.0) coreReasons.push(`DO ${dissolved_oxygen_mg_l} mg/L below 5.0 mg/L`);
-    if (bod_mg_l != null && bod_mg_l > 3.0) coreReasons.push(`BOD ${bod_mg_l} mg/L exceeds 3.0 mg/L`);
-
-    if (fecal_coliform_mpn_100ml != null) {
-      if (fecal_coliform_mpn_100ml > 0) coreReasons.push(`Fecal coliform ${fecal_coliform_mpn_100ml} MPN/100mL should be 0`);
-    } else if (total_coliform_mpn_100ml != null && total_coliform_mpn_100ml > 0) {
-      coreReasons.push(`Total coliform ${total_coliform_mpn_100ml} MPN/100mL should be 0`);
-    }
-
-    if (turbidity_ntu != null && turbidity_ntu > 10) extendedReasons.push(`Turbidity ${turbidity_ntu} NTU is high for safe/pleasant bathing`);
-    if (e_coli_present === true) extendedReasons.push("E. coli detected");
-
-    return buildScreeningResult("bathing", coreReasons.length === 0, coreReasons.length === 0 && extendedReasons.length === 0, coreReasons, extendedReasons, checked);
   }
 
   // Parameter buttons react to both location changes and period/year availability.
@@ -2425,6 +1978,27 @@
     refreshParameterScale();
   }
 
+  // Teardrop map pin (Google Maps style) whose tip sits exactly on the station.
+  function stationPinIcon({ fill, ring, active }) {
+    const width = active ? 24 : 16;
+    const height = Math.round(width * 1.4);
+    const svg = [
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 24 34" aria-hidden="true">`,
+      `<path d="M12 1.2C6 1.2 1.2 6 1.2 12c0 7.6 9 18.4 10.1 19.7a.9.9 0 0 0 1.4 0C13.8 30.4 22.8 19.6 22.8 12 22.8 6 18 1.2 12 1.2z"`,
+      ` fill="${fill}" stroke="${ring}" stroke-width="${active ? 2 : 1.6}"/>`,
+      `<circle cx="12" cy="12" r="4.2" fill="${ring}"/>`,
+      "</svg>",
+    ].join("");
+    return L.divIcon({
+      className: `station-pin${active ? " is-active" : ""}`,
+      html: svg,
+      iconSize: [width, height],
+      iconAnchor: [width / 2, height],
+      popupAnchor: [0, -height + 4],
+      tooltipAnchor: [0, -height],
+    });
+  }
+
   // Recolor map markers whenever suitability or selection state changes.
   function refreshMarkerStyles(openActivePopup = true) {
     const activeRing = readCssColour("--marker-active-ring", "#111827");
@@ -2434,15 +2008,15 @@
       const isStp = isSewageTreatmentPlant(locationName);
       const suitability = cachedSuitability(locationName);
       const style = {
-        radius: isActive ? 12 : 8,
-        fillColor: SUITABILITY_COLORS[suitability.status] || SUITABILITY_COLORS.unknown,
-        color: isActive ? activeRing : (isStp ? "#92400e" : ring),
-        weight: isActive ? 3 : 2,
+        fill: SUITABILITY_COLORS[suitability.status] || SUITABILITY_COLORS.unknown,
+        ring: isActive ? activeRing : (isStp ? "#92400e" : ring),
+        active: isActive,
       };
-      const key = `${style.radius}|${style.fillColor}|${style.color}|${style.weight}`;
+      const key = `${style.fill}|${style.ring}|${style.active}`;
       if (marker._ogsStyleKey !== key) {
         marker._ogsStyleKey = key;
-        marker.setStyle(style);
+        marker.setIcon(stationPinIcon(style));
+        marker.setZIndexOffset(isActive ? 1000 : 0);
       }
       if (marker.isPopupOpen()) marker.getPopup().update();
     });
@@ -2573,7 +2147,7 @@
         marker.bindTooltip(() => buildMapLabel(locationName), {
           permanent,
           direction: "top",
-          offset: [0, -14],
+          offset: [0, -2],
           className: "point-value-tooltip",
           opacity: 1,
         });
@@ -2792,7 +2366,7 @@
   }
 
   // Interpolation rasters are loaded once and reused as the selected parameter changes.
-  // The library computes kriging on the first request and caches it per dataset.
+  // The library interpolates along the rivers on the first request and caches it per dataset.
   async function loadInterpolationData() {
     // Empty datasets do not need interpolation.
     if (dashboardData.records.length === 0) {
@@ -2817,6 +2391,7 @@
         })
         .then((payload) => {
           // Store the parsed interpolation payload for future parameter/year switches.
+          expandInterpolationGrids(payload);
           interpolationData = payload;
           return payload;
         })
@@ -2833,6 +2408,47 @@
     return interpolationRequest;
   }
 
+  // The API lists only the painted cells of each grid; rebuild the dense row-major arrays.
+  function expandInterpolationGrids(payload) {
+    for (const surfaces of Object.values(payload?.surfaces || {})) {
+      for (const surface of surfaces || []) {
+        const grid = surface.grid;
+        if (!grid || grid.encoding !== "sparse") continue;
+        const size = grid.rows * grid.columns;
+        grid.lower = new Array(size).fill(null);
+        grid.upper = new Array(size).fill(null);
+        grid.confidence = new Array(size).fill(null);
+        grid.cells.forEach((cell, index) => {
+          grid.lower[cell] = grid.cellLower[index];
+          grid.upper[cell] = grid.cellUpper[index];
+          grid.confidence[cell] = grid.cellConfidence[index];
+        });
+        grid.values = grid.upper;
+      }
+    }
+  }
+
+  // Each surface is an interval: a lower run (Min where reported) and an upper run (Max).
+  // The Lower / Upper switch picks which one colours the map.
+  function getInterpolationLayer(surface) {
+    return surface?.grid?.[interpolationBound] || surface?.grid?.values || [];
+  }
+
+  function getInterpolationRun(surface) {
+    return surface?.runs?.[interpolationBound] || surface;
+  }
+
+  function syncInterpolationBoundButtons(surface) {
+    const control = document.getElementById("interp-bound");
+    if (!control) return;
+    control.hidden = !surface?.interval;
+    control.querySelectorAll("[data-interp-bound]").forEach((button) => {
+      const active = button.dataset.interpBound === interpolationBound;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
+
   // Pick the raster surface that best matches the current parameter/year selection.
   // Each library surface represents one parameter for either:
   // 1. a specific year, or
@@ -2845,9 +2461,12 @@
     // Normalize the selected parameter name so frontend labels match backend surface names.
     const parameterFamily = getCanonicalInterpolationParameter(getParameterFamily(state.selectedParameter));
     const targetYear = getInterpolationTargetYear();
-    const matchSurface = (surfaces) => surfaces.find((surface) =>
-      getCanonicalInterpolationParameter(getParameterFamily(surface.parameterFamily || surface.parameter)) === parameterFamily
-    ) || null;
+    // Min and Max readings have their own surfaces: prefer the exact parameter, then its family.
+    const exact = String(state.selectedParameter).trim().toLowerCase();
+    const matchSurface = (surfaces) => surfaces.find((surface) => String(surface.parameter).trim().toLowerCase() === exact)
+      || surfaces.find((surface) =>
+        getCanonicalInterpolationParameter(getParameterFamily(surface.parameterFamily || surface.parameter)) === parameterFamily
+      ) || null;
 
     if (targetYear != null) {
       // Prefer a year-specific surface when the UI is focused on one year.
@@ -2877,13 +2496,21 @@
       Math.round(((extent.maxLatitude - latlng.lat) / (latitudeSpan || 1)) * (grid.rows - 1))));
     const column = Math.max(0, Math.min(grid.columns - 1,
       Math.round(((latlng.lng - extent.minLongitude) / (longitudeSpan || 1)) * (grid.columns - 1))));
-    const value = grid.values[(row * grid.columns) + column];
-    return Number.isFinite(value) ? { value, surface, row, column } : null;
+    const cell = (row * grid.columns) + column;
+    const lower = grid.lower?.[cell] ?? grid.values[cell];
+    const upper = grid.upper?.[cell] ?? grid.values[cell];
+    const value = getInterpolationLayer(surface)[cell];
+    const confidence = grid.confidence?.[cell];
+    if (!Number.isFinite(lower) && !Number.isFinite(upper)) return null;
+    return {
+      value, lower: Number.isFinite(lower) ? lower : null, upper: Number.isFinite(upper) ? upper : null,
+      confidence: Number.isFinite(confidence) ? confidence : null, surface, row, column,
+    };
   }
 
   function getInterpolationTargetYear() {
     if (state.selectedYear !== "all") {
-      // If the user explicitly picked a year, use that year’s kriging surface.
+      // If the user explicitly picked a year, use that year’s surface.
       return state.selectedYear;
     }
 
@@ -2925,7 +2552,8 @@
       return;
     }
     const surface = getInterpolationSurface();
-    if (!surface?.grid?.values?.length) {
+    syncInterpolationBoundButtons(surface);
+    if (!getInterpolationLayer(surface).length) {
       status.textContent = !dashboardData.records.length ? "Import a CSV to view interpolation." : !interpolationData ? "Loading interpolation..." : "No interpolation for this parameter and year.";
       return;
     }
@@ -2941,14 +2569,32 @@
       [surface.grid.extent.maxLatitude, surface.grid.extent.maxLongitude],
     ];
 
-    const values = surface.grid.values.filter(Number.isFinite);
+    const values = getInterpolationLayer(surface).filter(Number.isFinite);
     const minimum = Math.min(...values);
     const maximum = Math.max(...values);
     legend.hidden = false;
     legend.textContent = `${formatCompactNumber(minimum)} \u2013 ${formatCompactNumber(maximum)} ${surface.unit || ""}`;
-    status.textContent = `${surface.parameter} \u00b7 ${surface.year ?? "All years"}. ${surface.method}. Click the coloured area for an estimate.`;
+    const run = getInterpolationRun(surface);
+    const validation = run.validation || surface.validation;
+    const error = validation?.rmse;
+    const errorText = Number.isFinite(error)
+      ? ` Leave-one-out error \u00b1${formatCompactNumber(error)}${surface.unit ? ` ${surface.unit}` : ""} (${validation.checkedCount} of ${validation.stationCount} stations checked).`
+      : "";
+    const boundText = surface.interval
+      ? ` Showing the ${interpolationBound} bound (${interpolationBound === "upper" ? "Max" : "Min"} where only a range was reported).`
+      : "";
+    const skill = validation?.skill;
+    const skillText = !Number.isFinite(skill) ? ""
+      : skill > 0 ? ` ${Math.round(skill * 100)}% better than using the average of the other stations.`
+        : " No better than using the average of the other stations: read it as a sketch.";
+    const reach = interpolationData?.method?.maxDistanceKm;
+    const chosen = interpolationData?.method?.distanceSelection?.mode === "auto" ? ", chosen by leave-one-out" : "";
+    const reachText = interpolationData?.method?.distanceMeasuredAlong === "river"
+      ? ` Reach: ${reach == null ? "no limit" : `${formatCompactNumber(reach)} km`} along the river${chosen}.`
+      : "";
+    status.textContent = `${surface.parameter} \u00b7 ${surface.year ?? "All years"}. ${run.method || surface.method}.${boundText}${reachText}${errorText}${skillText} Faded colour means low confidence. Click the coloured area for an estimate.${surface.warning ? ` \u26a0 ${surface.warning}` : ""}`;
 
-    // Leaflet places the generated PNG over the geographic bounds of the kriging grid.
+    // Leaflet places the generated PNG over the geographic bounds of the interpolation grid.
     interpolationOverlay = L.imageOverlay(imageUrl, bounds, {
       opacity: 0.88,
       pane: "interpolationPane",
@@ -2961,7 +2607,8 @@
   // value into one pixel of an off-screen canvas and then export that canvas as an image.
   function buildInterpolationImage(surface) {
     const grid = surface.grid;
-    const validValues = grid.values.filter((value) => Number.isFinite(value));
+    const layer = getInterpolationLayer(surface);
+    const validValues = layer.filter((value) => Number.isFinite(value));
     if (!validValues.length || !grid.columns || !grid.rows) {
       return null;
     }
@@ -2977,7 +2624,7 @@
     context.imageSmoothingEnabled = true;
     const imageData = context.createImageData(grid.columns, grid.rows);
 
-    grid.values.forEach((value, index) => {
+    layer.forEach((value, index) => {
       const pixelOffset = index * 4;
       if (!Number.isFinite(value)) {
         // Transparent pixel for masked or unavailable cells.
@@ -2991,7 +2638,9 @@
       imageData.data[pixelOffset] = color[0];
       imageData.data[pixelOffset + 1] = color[1];
       imageData.data[pixelOffset + 2] = color[2];
-      imageData.data[pixelOffset + 3] = 210;
+      // Fade cells with low confidence (0-100) so weakly supported estimates stand back.
+      const confidence = grid.confidence?.[index];
+      imageData.data[pixelOffset + 3] = Number.isFinite(confidence) ? Math.round(60 + (1.6 * confidence)) : 210;
     });
 
     context.putImageData(imageData, 0, 0);

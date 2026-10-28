@@ -540,8 +540,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                                cache_key="network" if result.get("available") else None)
                 return
             if route == "/api/interpolation":
-                self.send_json(HTTPStatus.OK, ensure_interpolation(entry),
-                               cache=entry.setdefault("json_cache", {}), cache_key="interpolation")
+                from .interpolation import compact_payload
+                cache = entry.setdefault("json_cache", {})
+                payload = {} if "interpolation" in cache else compact_payload(ensure_interpolation(entry))
+                self.send_json(HTTPStatus.OK, payload, cache=cache, cache_key="interpolation")
                 return
             self.send_json(HTTPStatus.OK, build_figure(entry, query))
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):

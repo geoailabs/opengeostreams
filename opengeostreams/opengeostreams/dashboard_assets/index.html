@@ -14,11 +14,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Leaflet 1.9.4 ships with the library (vendor/leaflet, BSD-2-Clause) so the map works offline. -->
   <link
     rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    href="./vendor/leaflet/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
   >
   <link rel="stylesheet" href="./styles.css?v=20260926-tip">
 </head>
@@ -148,6 +148,10 @@
           </div>
           <div class="legend-layer">
             <label class="switch-row"><span>Interpolation</span><input type="checkbox" id="map-interpolation-toggle" class="switch" checked></label>
+            <div id="interp-bound" class="interp-bound segmented segmented-sm" role="group" aria-label="Interval bound shown on the map" hidden>
+              <button type="button" data-interp-bound="lower" aria-pressed="false" title="Min readings where only a range was reported">Lower</button>
+              <button type="button" class="is-active" data-interp-bound="upper" aria-pressed="true" title="Max readings where only a range was reported">Upper</button>
+            </div>
             <div class="interp-scale">
               <span class="interp-gradient" aria-hidden="true"></span>
               <span id="map-interpolation-legend" hidden></span>
@@ -383,9 +387,8 @@
   </dialog>
 
   <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    src="./vendor/leaflet/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
   ></script>
   <script src="/plotly.min.js"></script>
   <script src="./dashboard-data.js?v=20260824-empty-state"></script>

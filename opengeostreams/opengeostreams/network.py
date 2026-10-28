@@ -49,6 +49,7 @@ NETWORK_CANDIDATES = (
     pipeline.PROJECT_ROOT / "data" / "indiawris" / "WRIS_Rivers_2024.parquet",
     pipeline.PACKAGE_ROOT / "reference_data" / "indiawris_punjab_channels_2024.shp",
 )
+HYDRORIVERS_DIR = pipeline.PROJECT_ROOT / "data" / "hydrorivers"
 # Local names that mean the same water body ("alias,name" CSV). Users can add their own
 # file with OPENGEOSTREAMS_ALIASES or data/water_body_aliases.csv in the project folder.
 ALIASES_ENV = "OPENGEOSTREAMS_ALIASES"
@@ -56,7 +57,13 @@ ALIAS_FILES = (
     pipeline.PACKAGE_ROOT / "reference_data" / "water_body_aliases.csv",
     pipeline.PROJECT_ROOT / "data" / "water_body_aliases.csv",
 )
-NODE_TOLERANCE_M = 30.0      # endpoints closer than this are the same network node
+# Line attributes understood in any network file (India-WRIS, HydroRIVERS, MERIT-Basins, NHDPlus, ...).
+NAME_COLUMNS = ("rivname", "channel", "name", "NAME", "river", "Name", "river_name", "RIVER_NAME", "gnis_name", "GNIS_NAME")
+# Upstream catchment area in km², compared case-insensitively.
+AREA_COLUMNS = ("upstream_area", "upstream_area_km2", "UPLAND_SKM", "uparea", "upa", "TotDASqKm",
+                "drainage_area", "drainage_area_km2", "catchment_area", "catchment_km2", "DA_KM2")
+DISCHARGE_COLUMNS = ("discharge", "design_discharge", "discharge_cumecs", "design_discharge_cumecs", "DIS_AV_CMS")
+NODE_TOLERANCE_M = 30.0     # endpoints closer than this are the same network node
 CONFLUENCE_TOLERANCE_M = 250.0  # a channel end this close to another line is a confluence
 EXTENDED_SNAP_M = 5000.0  # beyond the limit, only onto a channel that already has stations
 EXTENDED_NEIGHBOUR_M = 10000.0  # ... and one of them within this distance
@@ -215,17 +222,35 @@ def _geo():
     return gpd, shapely
 
 
-def find_network_path(path: str | Path | None = None) -> Path:
+def network_sources(path: str | Path | None = None) -> list[Path]:
+    """Existing network files in order of preference.
+
+    The user's own file (``path``, then ``OPENGEOSTREAMS_NETWORK``) comes first, then
+    India-WRIS (small drains in India), then any worldwide HydroRIVERS file placed in
+    ``data/hydrorivers/`` (large rivers anywhere; it leaves out streams under 10 km²).
+    """
     candidates = [Path(path)] if path else []
     if os.environ.get(NETWORK_ENV):
         candidates.append(Path(os.environ[NETWORK_ENV]))
     candidates.extend(NETWORK_CANDIDATES)
+    if HYDRORIVERS_DIR.is_dir():
+        candidates.extend(sorted(item for item in HYDRORIVERS_DIR.rglob("*")
+                                 if item.suffix.lower() in {".parquet", ".shp", ".gpkg"}))
+    found = []
     for candidate in candidates:
-        if candidate.expanduser().is_file():
-            return candidate.expanduser()
+        candidate = candidate.expanduser()
+        if candidate.is_file() and candidate not in found:
+            found.append(candidate)
+    return found
+
+
+def find_network_path(path: str | Path | None = None) -> Path:
+    sources = network_sources(path)
+    if sources:
+        return sources[0]
     raise ValueError(
-        "No river network file found. Put WRIS_Rivers_2024.parquet in data/indiawris/ "
-        f"or set {NETWORK_ENV} to a river/drain line file."
+        "No river network file found. Put WRIS_Rivers_2024.parquet in data/indiawris/, a HydroRIVERS file "
+        f"in data/hydrorivers/, or set {NETWORK_ENV} to a river/drain line file."
     )
 
 
@@ -298,8 +323,11 @@ def _read_network(source: Path, box: tuple[float, float, float, float], gpd):
             if source.suffix.lower() != ".shp":
                 raise
             lines = _read_shapefile_lines(source, box, gpd)
-    name_column = next((column for column in ("rivname", "channel", "name", "NAME", "river", "Name") if column in lines), None)
-    kind_column = next((column for column in ("layer", "kind") if column in lines), None)
+    name_column = next((column for column in NAME_COLUMNS if column in lines), None)
+    by_lower = {str(column).casefold(): column for column in lines.columns}
+    kind_column = next((column for column in ("layer", "kind", "waterway", "WATERWAY") if column in lines), None)
+    discharge_column = next((by_lower[key.casefold()] for key in DISCHARGE_COLUMNS if key.casefold() in by_lower), None)
+    area_column = next((by_lower[key.casefold()] for key in AREA_COLUMNS if key.casefold() in by_lower), None)
     raw_names = lines[name_column].fillna("").astype(str).str.strip() if name_column else pd.Series("", index=lines.index)
     aliases = load_aliases()
     result = gpd.GeoDataFrame({
@@ -307,6 +335,10 @@ def _read_network(source: Path, box: tuple[float, float, float, float], gpd):
         "name": [canonical_name(value, aliases) for value in raw_names],
         "network_name": raw_names.tolist(),
         "kind": lines[kind_column].fillna("").astype(str) if kind_column else "",
+        # Upstream catchment area (km²) when the file has one; used to weight river junctions.
+        "upstream_area": pd.to_numeric(lines[area_column], errors="coerce") if area_column else math.nan,
+        # Design or mean discharge, used to share water where a channel splits (canal off-takes).
+        "discharge": pd.to_numeric(lines[discharge_column], errors="coerce") if discharge_column else math.nan,
     }, geometry=lines.geometry.values, crs="EPSG:4326")
     result = result[result.geometry.notna() & ~result.geometry.is_empty]
     result = result.explode(index_parts=False).reset_index(drop=True)
@@ -453,44 +485,6 @@ def _dijkstra(adjacency: dict[int, list[tuple[int, float]]], source: int) -> dic
                 distances[neighbour] = candidate
                 heapq.heappush(queue, (candidate, neighbour))
     return distances
-
-
-def river_corridor_mask(network_result: dict[str, Any], extent: dict[str, float], stations: list[tuple[float, float]],
-                        *, rows: int = pipeline.GRID_ROWS, columns: int = pipeline.GRID_COLUMNS,
-                        min_half_width_m: float = 400.0) -> dict[str, Any] | None:
-    """Rasterise the matched drains/rivers into an interpolation mask.
-
-    Kriging is only meaningful along the water: cells within a narrow corridor
-    around the channels that carry stations (plus a small disc around every
-    station) are kept, everything else stays transparent. The corridor is at
-    least one grid cell wide so the ribbon never breaks up on coarse grids.
-    """
-    import geopandas as gpd
-    import numpy as np
-    import shapely
-    from shapely.geometry import shape
-
-    lines = [shape(channel["geometry"]) for channel in network_result.get("channels", []) if channel.get("geometry")]
-    if not lines or not stations:
-        return None
-    points = gpd.GeoSeries(gpd.points_from_xy([lon for _, lon in stations], [lat for lat, _ in stations]), crs="EPSG:4326")
-    metric = points.estimate_utm_crs()
-    lat_step = (extent["maxLatitude"] - extent["minLatitude"]) / (rows - 1)
-    lon_step = (extent["maxLongitude"] - extent["minLongitude"]) / (columns - 1)
-    mid_lat = math.radians((extent["maxLatitude"] + extent["minLatitude"]) / 2)
-    cell_m = max(lat_step * 111_320.0, lon_step * 111_320.0 * math.cos(mid_lat))
-    half_width = max(min_half_width_m, 0.75 * cell_m)
-    corridor = gpd.GeoSeries(lines, crs="EPSG:4326").to_crs(metric).buffer(half_width)
-    discs = points.to_crs(metric).buffer(half_width * 1.5)
-    area = shapely.union_all(list(corridor) + list(discs))
-    grid_rows, grid_columns = np.divmod(np.arange(rows * columns), columns)
-    cell_lat = extent["maxLatitude"] - grid_rows * lat_step
-    cell_lon = extent["minLongitude"] + grid_columns * lon_step
-    cells = gpd.GeoSeries(gpd.points_from_xy(cell_lon, cell_lat), crs="EPSG:4326").to_crs(metric)
-    inside = shapely.contains_xy(area, cells.x.to_numpy(), cells.y.to_numpy())
-    return {"rows": rows, "cols": columns, "extent": extent, "maskValues": inside.astype(int).tolist(),
-            "generatedFrom": "matched drain/river network", "activeCellCount": int(inside.sum()),
-            "widthStats": {"halfWidthM": round(half_width, 1)}}
 
 
 def _rounded_geojson(geometry, digits=5):

@@ -452,14 +452,11 @@ class ImportAndStreamTests(unittest.TestCase):
         self.assertEqual(rain.iloc[0]["NumericValue"], 30)
 
     def test_missing_breakdown_and_uploaded_extent(self):
-        from unittest.mock import patch
-        from opengeostreams.opengeostreams import pipeline
+        from opengeostreams.opengeostreams import interpolation
         dataset = process_uploaded_csv("river.csv", CSV)
         self.assertEqual(sum(dataset.summary["missingByColumn"].values()), dataset.summary["missingValueCount"])
-        mask = {"extent": {"minLatitude": 10, "maxLatitude": 11, "minLongitude": 10, "maxLongitude": 11}}
-        with patch.object(pipeline, "load_river_mask", return_value=mask), patch.object(pipeline, "GRID_ROWS", 4), patch.object(pipeline, "GRID_COLUMNS", 4):
-            result = pipeline.build_interpolation_data(dataset._dashboard_data, output_path=None)
-        self.assertIsNone(result["riverMask"])
+        result = interpolation.build_interpolation_data(dataset._dashboard_data["records"])
+        self.assertFalse(result["network"]["found"])
         self.assertGreater(result["extent"]["minLatitude"], 30)
         self.assertTrue(result["surfaces"]["allYears"])
         self.assertTrue(any(value is not None for value in result["surfaces"]["allYears"][0]["grid"]["values"]))
@@ -488,6 +485,8 @@ class ImportAndStreamTests(unittest.TestCase):
 
 
 class GeneralRiverInterpolationTests(unittest.TestCase):
+    """Without a river map near the stations the library falls back to straight-line IDW."""
+
     def dataset(self):
         return ogs.from_dataframe(pd.DataFrame({
             "Parameter": ["pH", "pH", "pH", "BOD"], "Value": [6, 8, 10, 2],
@@ -496,34 +495,270 @@ class GeneralRiverInterpolationTests(unittest.TestCase):
             "Longitude": [-60.0, -60.1, -60.1, -70.0], "Year": [2024] * 4,
         }))
 
-    def test_coordinate_grouping_and_parameter_extent(self):
-        from opengeostreams.opengeostreams import pipeline
+    def test_one_value_per_station_and_straight_line_fallback(self):
         data = self.dataset()
-        with patch.object(pipeline, "GRID_ROWS", 5), patch.object(pipeline, "GRID_COLUMNS", 5):
-            data.interpolate(max_distance_km=30)
+        with patch.dict(os.environ, {"OPENGEOSTREAMS_OFFLINE": "1"}):
+            _, summary = data.interpolate(max_distance_km=30)
         surfaces = data._interpolation["surfaces"]["allYears"]
         ph = next(surface for surface in surfaces if surface["parameter"] == "pH")
         bod = next(surface for surface in surfaces if surface["parameter"] == "BOD")
         self.assertEqual(ph["pointCount"], 2)
-        self.assertEqual(sorted(point["value"] for point in ph["samplePoints"]), [6, 9])
+        self.assertEqual(sorted(point["value"] for point in ph["samplePoints"]), [7, 10])
+        self.assertEqual(ph["methodKey"], "straight_idw")
+        self.assertIn("straight lines", ph["warning"])
         self.assertGreater(ph["grid"]["extent"]["minLatitude"], -4)
         self.assertEqual(ph["grid"]["maxDistanceKm"], 30)
+        self.assertIsNotNone(ph["validation"]["rmse"])
         self.assertIn("no spatial interpolation", bod["method"])
-        self.assertIsNone(data._interpolation["riverMask"])
+        self.assertFalse(summary["networkFound"])
+        self.assertTrue(summary["warnings"])
 
-    def test_no_coordinates_and_invalid_distance(self):
-        from opengeostreams.opengeostreams import pipeline
-        self.assertIsNone(pipeline.interpolation_extent([], None))
+    def test_no_coordinates_and_invalid_arguments(self):
         for value in (0, -1, float('nan'), True):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.dataset().interpolate(max_distance_km=value)
+        with self.assertRaises(ValueError):
+            self.dataset().interpolate(junction_weights="largest")
         data = self.dataset()
         for record in data._dashboard_data["records"]:
             record["hasCoordinates"] = False
         data.interpolate()
         self.assertIsNone(data._interpolation["extent"])
         self.assertEqual(data._interpolation["surfaces"]["allYears"], [])
+        from opengeostreams.opengeostreams import pipeline
         self.assertEqual(pipeline.location_group("Before confluence with Ghaggar"), "Before confluence with Ghaggar")
+
+
+class RiverInterpolationTests(unittest.TestCase):
+    """Along-river IDW on a small synthetic network.
+
+    Main River runs south from 30.20 to 30.00 N along 76.00 E. Side Drain joins it from
+    the east at 30.10 N, and Test Canal leaves it westwards at 30.15 N (an off-take).
+    """
+
+    STATIONS = [("S1 upstream", 30.18, 76.0, 10.0), ("S2 below off-take", 30.12, 76.0, 20.0),
+                ("S3 canal", 30.15, 75.95, 12.0), ("D1 drain", 30.10, 76.05, 100.0),
+                ("S4 below junction", 30.05, 76.0, 30.0)]
+
+    def setUp(self):
+        patcher = patch.dict(os.environ, {"OPENGEOSTREAMS_OFFLINE": "1"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def lines(self, canal=True, area=False, rejoin=False):
+        import geopandas as gpd
+        from shapely.geometry import LineString
+        rows = [("Main River", LineString([(76.0, 30.20), (76.0, 30.00)]), 90.0),
+                ("Side Drain", LineString([(76.10, 30.10), (76.0005, 30.10)]), 10.0)]
+        if canal:
+            rows.append(("Test Canal", LineString([(76.0004, 30.15), (75.90, 30.15)]), float("nan")))
+        if rejoin:  # drawn from the river below back to the river above: water would flow in a circle
+            rows.append(("Loop Canal", LineString([(76.0004, 30.03), (76.03, 30.06), (76.0004, 30.17)]), float("nan")))
+        frame = gpd.GeoDataFrame({"name": [row[0] for row in rows], "network_name": [row[0] for row in rows],
+                                  "kind": [""] * len(rows)}, geometry=[row[1] for row in rows], crs="EPSG:4326")
+        if area:
+            frame["upstream_area"] = [row[2] for row in rows]
+        return frame
+
+    def dataset(self, stations=None, parameter="pH"):
+        stations = stations or self.STATIONS
+        return ogs.from_dataframe(pd.DataFrame([
+            {"Parameter": parameter, "Value": value, "Location": name, "Latitude": lat, "Longitude": lon,
+             "Date": "01-01-2024"} for name, lat, lon, value in stations]))
+
+    def graph(self, data, **options):
+        from opengeostreams.opengeostreams import interpolation
+        lines = options.pop("lines", None)
+        return interpolation.build_river_graph(data.data, None, lines=self.lines() if lines is None else lines,
+                                               buffer_km=20, use_elevation=False, **options)
+
+    def relation(self, graph, target, station):
+        position = graph.stations[target]
+        distance, relation, share = graph.relations([graph.stations[station]], np.array([position[0]]),
+                                                    np.array([position[1]]))
+        return float(distance[0, 0]), int(relation[0, 0]), float(share[0, 0])
+
+    def test_flow_direction_canal_split_and_water_share(self):
+        from opengeostreams.opengeostreams import interpolation as interp
+        graph = self.graph(self.dataset())
+        self.assertFalse(graph.tree)
+        self.assertEqual(graph.info["splits"], 1)
+        self.assertEqual(graph.info["junctionWeights"], "equal")
+        self.assertEqual(graph.info["outlets"][0]["directionMethod"], "direction the lines are drawn in")
+        # The canal takes water from above the off-take only.
+        distance, relation, share = self.relation(graph, "S3 canal", "S1 upstream")
+        self.assertEqual((relation, share), (interp.DOWNSTREAM, 1.0))
+        self.assertAlmostEqual(distance / 1000, 3.3 + 4.8, delta=0.3)
+        self.assertEqual(self.relation(graph, "S3 canal", "S2 below off-take")[1], 0)
+        self.assertEqual(self.relation(graph, "S2 below off-take", "S3 canal")[1], 0)
+        # A station on a separate drain never counts for one on another branch.
+        self.assertEqual(self.relation(graph, "D1 drain", "S2 below off-take")[1], 0)
+        # Below the junction, each side supplies half of the water.
+        self.assertEqual(self.relation(graph, "S4 below junction", "D1 drain")[1:], (interp.DOWNSTREAM, 0.5))
+        self.assertEqual(self.relation(graph, "S2 below off-take", "S4 below junction")[1:], (interp.UPSTREAM, 0.5))
+        self.assertEqual(self.relation(graph, "S4 below junction", "S1 upstream")[1:], (interp.DOWNSTREAM, 0.5))
+
+    def test_estimates_use_only_flow_connected_stations(self):
+        from opengeostreams.opengeostreams import interpolation as interp
+        data = self.dataset()
+        graph = self.graph(data)
+        payload = interp.build_interpolation_data(data._dashboard_data["records"], graph=graph, max_distance_km=20)
+        (surface,) = payload["surfaces"]["allYears"]
+        self.assertEqual(surface["methodKey"], "river_idw")
+        self.assertEqual(surface["usedStationCount"], 5)
+        self.assertEqual(payload["network"]["source"], "custom network")
+        # Hidden in turn: the canal station is predicted from S1 alone, the drain station from S4 alone.
+        checked = {item["location"]: item["predicted"] for item in surface["validation"]["stations"]}
+        self.assertEqual(checked["S3 canal"], 10.0)
+        self.assertEqual(checked["D1 drain"], 30.0)
+        self.assertIsNotNone(surface["validation"]["rmse"])
+        self.assertIn("Canals run in rotation", surface["warning"])
+        # A point on the drain between D1 and the junction only mixes D1 and S4.
+        edge, t = graph.stations["D1 drain"]
+        names = sorted(graph.stations)
+        distance, relation, share = graph.relations([graph.stations[name] for name in names],
+                                                    np.array([edge]), np.array([t / 2]))
+        values = np.array([dict((row[0], row[3]) for row in self.STATIONS)[name] for name in names])
+        estimate, confidence = interp._idw(distance, relation, share, values, 20000, 2.0)
+        self.assertTrue(30 < estimate[0] < 100)
+        connected = {names[column] for column in np.nonzero(share[0] > 0)[0]}
+        self.assertEqual(connected, {"D1 drain", "S4 below junction"})
+        self.assertTrue(0 < confidence[0] <= 1)
+        grid = surface["grid"]
+        painted = [value for value in grid["values"] if value is not None]
+        self.assertTrue(painted)
+        self.assertTrue(all(0 <= value <= 100 for value in grid["confidence"] if value is not None))
+        compact = interp.compact_payload(payload)["surfaces"]["allYears"][0]["grid"]
+        self.assertEqual(compact["encoding"], "sparse")
+        self.assertEqual(len(compact["cells"]), len(painted))
+        self.assertNotIn("values", compact)
+
+    def test_catchment_area_weights_junctions(self):
+        graph = self.graph(self.dataset(), lines=self.lines(canal=False, area=True))
+        self.assertEqual(graph.info["junctionWeights"], "area")
+        self.assertAlmostEqual(self.relation(graph, "S4 below junction", "D1 drain")[2], 0.1, places=5)
+        self.assertAlmostEqual(self.relation(graph, "S4 below junction", "S2 below off-take")[2], 0.9, places=5)
+        order = self.graph(self.dataset(), lines=self.lines(canal=False), junction_weights="order")
+        self.assertEqual(order.info["junctionWeights"], "order")
+        self.assertAlmostEqual(self.relation(order, "S4 below junction", "D1 drain")[2], 0.5, places=5)
+
+    def test_canal_that_closes_a_cycle_is_dropped(self):
+        graph = self.graph(self.dataset(), lines=self.lines(canal=False, rejoin=True))
+        self.assertEqual(graph.info["droppedChannels"], ["Loop Canal"])
+        self.assertTrue(graph.tree)
+
+    def test_downstream_label_moves_station_below_the_junction(self):
+        stations = self.STATIONS[:2] + [("MAIN RIVER D/S OF SIDE DRAIN", 30.1003, 76.0, 25.0)] + self.STATIONS[3:]
+        graph = self.graph(self.dataset(stations), lines=self.lines(canal=False))
+        info = {item["location"]: item for item in graph.info["stations"]}
+        self.assertIn("just below the Side Drain junction", info["MAIN RIVER D/S OF SIDE DRAIN"]["positionFrom"])
+        self.assertEqual(self.relation(graph, "MAIN RIVER D/S OF SIDE DRAIN", "D1 drain")[1], 1)
+
+    def test_min_max_ranges_become_intervals_year_by_year(self):
+        from opengeostreams.opengeostreams import interpolation
+        data = ogs.from_dataframe(pd.DataFrame({
+                "Parameter": ["BOD (Max)", "BOD (Min)", "BOD", "BOD", "BOD", "BOD", "BOD (Max)", "BOD (Min)", "BOD (Max)"],
+            "Value": [9, 1, 6, 8, 8, 8, 20, 10, 40],
+            "Location": ["A"] * 6 + ["B", "B", "C"], "Latitude": [30.1] * 6 + [30.15] * 2 + [30.18],
+            "Longitude": [76.0] * 9,
+            "Date": ["01-01-2023", "01-01-2023", "01-01-2023", "01-01-2024", "01-02-2024", "01-03-2024",
+                     "01-01-2024", "01-01-2024", "01-01-2024"]}))
+        groups = interpolation.station_values(data._dashboard_data["records"], yearly=False)
+        self.assertEqual({key[1] for key in groups}, {"BOD"})  # one map per parameter, not one per Min/Max
+        points = {point["location"]: point for point in groups[("all_years", "BOD")][0]}
+        # A: ordinary readings win in 2023 (6, the Min/Max are ignored) and 2024 (8); years count equally.
+        self.assertEqual((points["A"]["lower"], points["A"]["upper"], points["A"]["kind"]), (7.0, 7.0, "reading"))
+        self.assertEqual(points["A"]["yearCount"], 2)
+        self.assertEqual((points["B"]["lower"], points["B"]["upper"], points["B"]["kind"]), (10.0, 20.0, "range"))
+        self.assertEqual((points["C"]["lower"], points["C"]["upper"], points["C"]["kind"]), (None, 40.0, "max only"))
+
+    def test_interval_runs_use_min_for_lower_and_max_for_upper(self):
+        stations = [("S1 upstream", 30.18, 76.0, 10.0), ("S2 below off-take", 30.12, 76.0, 20.0),
+                    ("S4 below junction", 30.05, 76.0, 30.0)]
+        rows = [{"Parameter": "pH", "Value": value, "Location": name, "Latitude": lat, "Longitude": lon,
+                 "Date": "01-01-2024"} for name, lat, lon, value in stations]
+        rows += [{"Parameter": "pH (Min)", "Value": 12, "Location": "R range", "Latitude": 30.15, "Longitude": 76.0,
+                  "Date": "01-01-2024"},
+                 {"Parameter": "pH (Max)", "Value": 28, "Location": "R range", "Latitude": 30.15, "Longitude": 76.0,
+                  "Date": "01-01-2024"},
+                 {"Parameter": "pH (Max)", "Value": 50, "Location": "M max only", "Latitude": 30.08, "Longitude": 76.0,
+                  "Date": "01-01-2024"}]
+        from opengeostreams.opengeostreams import interpolation
+        data = ogs.from_dataframe(pd.DataFrame(rows))
+        graph = self.graph(data, lines=self.lines(canal=False))
+        payload = interpolation.build_interpolation_data(data._dashboard_data["records"], graph=graph,
+                                                         max_distance_km=20)
+        (surface,) = payload["surfaces"]["allYears"]
+        self.assertTrue(surface["interval"])
+        self.assertEqual(surface["runs"]["lower"]["usedStationCount"], 4)   # the Max-only station is left out
+        self.assertEqual(surface["runs"]["upper"]["usedStationCount"], 5)
+        self.assertIn("Only a Max is reported at M max only", surface["warning"])
+        lower = {item["location"]: item["observed"] for item in surface["runs"]["lower"]["validation"]["stations"]}
+        upper = {item["location"]: item["observed"] for item in surface["runs"]["upper"]["validation"]["stations"]}
+        self.assertEqual((lower["R range"], upper["R range"]), (12.0, 28.0))
+        grid = surface["grid"]
+        pairs = [(low, high) for low, high in zip(grid["lower"], grid["upper"]) if low is not None and high is not None]
+        self.assertTrue(pairs)
+        self.assertTrue(all(low <= high + 1e-9 for low, high in pairs))
+        self.assertTrue(any(high > low + 1e-6 for low, high in pairs))
+        self.assertEqual(grid["values"], grid["upper"])
+        compact = interpolation.compact_payload(payload)["surfaces"]["allYears"][0]["grid"]
+        self.assertEqual(len(compact["cellLower"]), len(compact["cellUpper"]))
+        from opengeostreams.opengeostreams.plots import interpolation_figure
+        data._interpolation = payload
+        self.assertIn("lower bound", interpolation_figure(data, parameter="pH", bound="lower").layout.title.text)
+        self.assertIn("upper bound", interpolation_figure(data, parameter="pH (Max)").layout.title.text)
+
+    def test_auto_distance_picks_the_smallest_leave_one_out_error(self):
+        from opengeostreams.opengeostreams import interpolation
+        # Values follow distance along Main River, so nearby stations predict each other.
+        stations = [(f"M{index}", 30.195 - index * 0.015, 76.0, 10.0 + 3 * index) for index in range(12)]
+        data = self.dataset(stations)
+        graph = self.graph(data, lines=self.lines(canal=False))
+        payload = interpolation.build_interpolation_data(data._dashboard_data["records"], graph=graph)
+        selection = payload["method"]["distanceSelection"]
+        self.assertEqual(selection["mode"], "auto")
+        self.assertEqual([row["maxDistanceKm"] for row in selection["candidates"]], [2.0, 4.0, 8.0, 16.0, 32.0, None])
+        best = min(row["relativeError"] for row in selection["candidates"])
+        chosen = next(row for row in selection["candidates"] if row["maxDistanceKm"] == selection["chosenKm"])
+        self.assertEqual(chosen["relativeError"], best)
+        self.assertTrue(selection["beatsBaseline"])
+        self.assertEqual(payload["method"]["maxDistanceKm"], selection["chosenKm"])
+        (surface,) = payload["surfaces"]["allYears"]
+        self.assertGreater(surface["validation"]["skill"], 0)
+        # A fixed limit skips the search; too few stations fall back to 8 km.
+        fixed = interpolation.build_interpolation_data(data._dashboard_data["records"], graph=graph, max_distance_km=5)
+        self.assertEqual(fixed["method"]["distanceSelection"]["mode"], "fixed")
+        self.assertEqual(fixed["method"]["maxDistanceKm"], 5.0)
+        few = self.dataset(stations[:2])
+        sparse = interpolation.build_interpolation_data(few._dashboard_data["records"], graph=self.graph(few))
+        self.assertEqual(sparse["method"]["maxDistanceKm"], interpolation.FALLBACK_DISTANCE_KM)
+        # No limit: every flow-connected station counts, and confidence still fades with distance.
+        unlimited = interpolation.choose_distance(
+            interpolation.station_values(data._dashboard_data["records"], yearly=False), None, candidates=(None,))
+        self.assertIsNone(unlimited["chosenKm"])
+
+    def test_advanced_kriging_keeps_the_smaller_error(self):
+        from opengeostreams.opengeostreams import interpolation
+        rng = np.random.default_rng(3)
+        stations = [(f"M{index}", 30.19 - index * 0.012, 76.0, 10 + index + rng.random()) for index in range(12)]
+        stations += [(f"D{index}", 30.10, 76.09 - index * 0.012, 40 + index + rng.random()) for index in range(6)]
+        data = self.dataset(stations)
+        graph = self.graph(data, lines=self.lines(canal=False))
+        records = data._dashboard_data["records"]
+        with patch.object(interpolation, "MIN_KRIGING_STATIONS", 10):
+            payload = interpolation.build_interpolation_data(records, graph=graph, max_distance_km=20, advanced=True)
+            split = interpolation.build_interpolation_data(records, graph=self.graph(data), max_distance_km=20,
+                                                           advanced=True)
+        (surface,) = payload["surfaces"]["allYears"]
+        methods = {item["method"]: item for item in surface["candidates"]}
+        self.assertEqual(set(methods), {"river_idw", "tail_up", "tail_down", "mixed"})
+        best = min(item["rmseOnCommonStations"] for item in methods.values())
+        self.assertEqual(methods[surface["methodKey"]]["rmseOnCommonStations"], best)
+        self.assertTrue(any(value is not None for value in surface["grid"]["values"]))
+        self.assertIn("tree-shaped", split["surfaces"]["allYears"][0]["notes"][0])
+        default = interpolation.build_interpolation_data(records, graph=graph, max_distance_km=20, advanced=True)
+        self.assertIn("at least 50 stations", default["surfaces"]["allYears"][0]["notes"][0])
 
 
 class PngExportTests(unittest.TestCase):
@@ -905,23 +1140,52 @@ class CombineDatasetsTests(unittest.TestCase):
             worker.join()
 
 
-class FastKrigingTests(unittest.TestCase):
-    """The vectorised grid must match the original per-cell ordinary kriging."""
+class QualityCheckTests(unittest.TestCase):
+    def _record(self, parameter, value, location="A", sort_key=202401, file_name="f.csv"):
+        return {"locationGroup": location, "parameter": parameter, "numericValue": value, "fileName": file_name,
+                "sortKey": sort_key, "year": sort_key // 100, "monthIndex": sort_key % 100, "dateLabel": str(sort_key)}
 
-    def test_vectorised_matches_per_cell(self):
-        from opengeostreams.opengeostreams import pipeline
-        rng = np.random.default_rng(7)
-        points = [{"location": f"S{index}", "latitude": 30.6 + rng.random() * 0.2,
-                   "longitude": 76.6 + rng.random() * 0.2, "value": float(rng.random() * 50)} for index in range(25)]
-        # (Stations at identical coordinates are averaged before gridding, so none here.)
-        model = pipeline.interpolation_model(points, 8.0)
-        latitudes = np.linspace(30.55, 30.85, 23)
-        longitudes = np.linspace(76.55, 76.85, 23)
-        grid_lat, grid_lon = [array.ravel() for array in np.meshgrid(latitudes, longitudes)]
-        fast = pipeline._krige_targets(points, model, grid_lat, grid_lon)
-        for lat, lon, estimate in zip(grid_lat, grid_lon, fast):
-            value, nearest = pipeline.interpolate_ordinary_kriging(points, model, {"latitude": lat, "longitude": lon})
-            if value is None or nearest is None or nearest > model["supportDistanceKm"]:
-                self.assertTrue(np.isnan(estimate))
-            else:
-                self.assertAlmostEqual(estimate, value, places=6)
+    def test_rules_status_and_reasons(self):
+        from opengeostreams.opengeostreams import qualitycheck as qc
+        failing = qc.fit_for_agriculture(pH=9.0, boron_mg_l=1.0, chloride_mg_l=200)
+        self.assertEqual(qc.suitability_status("agriculture", failing), "unsafe")
+        self.assertEqual(failing["core_reasons"], ["pH 9 outside 6.0-8.5"])
+        caution = qc.fit_for_agriculture(pH=7.0, chloride_mg_l=200)
+        self.assertEqual(qc.suitability_status("agriculture", caution), "caution")
+        self.assertEqual(qc.suitability_status("agriculture", qc.fit_for_agriculture(pH=7.2)), "safe")
+        self.assertEqual(qc.suitability_status("agriculture", qc.fit_for_agriculture(chloride_mg_l=10)), "unknown")
+        # Faecal coliform overrides total coliform for bathing.
+        bathing = qc.fit_for_bathing(total_coliform_mpn_100ml=50, fecal_coliform_mpn_100ml=0)
+        self.assertTrue(bathing["fit_core"])
+
+    def test_sample_matching_prefers_plain_reading_and_reports_proxies(self):
+        from opengeostreams.opengeostreams import qualitycheck as qc
+        records = [self._record("pH (max)", 9.5), self._record("pH", 7.0), self._record("NO3-N", 60)]
+        result = qc.evaluate_sample(records, "human_consumption")
+        self.assertEqual(result["status"], "safe")
+        self.assertIn("pH via pH", result["coverage"]["confirmed"])
+        self.assertIn("Nitrate via NO3-N", result["coverage"]["proxy"])
+
+    def test_scales_and_latest_sample(self):
+        from opengeostreams.opengeostreams import qualitycheck as qc
+        self.assertEqual(qc.scale_key("Boron(B)"), "boron")
+        self.assertEqual(qc.scale_key("T-Coliform"), "total_coliform")
+        do = qc.scale_definition("aquatic_life", "DO")
+        self.assertEqual((qc.scale_status(do, 3.0), qc.scale_status(do, 6.0), qc.scale_status(do, None)), ("unsafe", "safe", "unknown"))
+        self.assertIsNone(qc.scale_definition("agriculture", "Colour"))
+        self.assertEqual(qc.scale_definition("agriculture", "Total Coliform")["label"], "Total Coliform")
+        records = [self._record("pH", 9.5, sort_key=202301), self._record("pH", 7.0, sort_key=202405)]
+        self.assertEqual(qc.screen_stations(records, "bathing")[0]["status"], "safe")
+        self.assertEqual(qc.screen_stations(records, "bathing", year=2023)[0]["status"], "unsafe")
+        self.assertEqual(qc.screen_stations(records, "bathing", month=2)[0]["status"], "unknown")
+
+    def test_dashboard_payload_includes_quality(self):
+        dataset = ogs.from_dataframe(pd.DataFrame({
+            "Parameter": ["pH", "DO (min)"], "Value": ["9.1", "6"], "Location": ["A", "A"],
+            "Latitude": [30.7, 30.7], "Longitude": [76.7, 76.7], "Date": ["01-03-2024", "01-03-2024"]}))
+        quality = dataset._dashboard_data["quality"]
+        self.assertEqual([item["key"] for item in quality["useCases"]][0], "human_consumption")
+        self.assertEqual(quality["scaleKeys"]["DO"], "do")
+        (sample,) = quality["samples"]["A"].values()
+        self.assertEqual(sample["bathing"]["status"], "unsafe")
+        self.assertEqual(sample["bathing"]["reasons"], ["pH 9.1 outside 6.5-8.5"])
