@@ -230,8 +230,7 @@ class RiverDataset:
         )
         all_years = self._interpolation["surfaces"]["allYears"]
         yearly = self._interpolation["surfaces"]["yearly"]
-        errors = {item["parameter"]: {bound: ((item.get("runs") or {}).get(bound, {}).get("validation") or {}).get("rmse")
-                                      for bound in ("lower", "upper")} for item in all_years}
+        errors = {item["parameter"]: (item.get("validation") or {}).get("rmse") for item in all_years}
         result = {
             "method": self._interpolation["method"]["type"],
             "networkFound": self._interpolation["network"]["found"],
@@ -312,11 +311,34 @@ class RiverDataset:
             webbrowser.open(destination.as_uri())
         return map_object
 
+    def watershed_planner(self, save_path: str | Path | None = None, *,
+                          terrain_path: str | Path | None = None, open_browser: bool = False) -> Path:
+        """Save the dashboard's Watershed analysis as one HTML file that works offline.
+
+        Draw an area on its map to get the watersheds covering it, their pour points and
+        the recommended sampling points; this dataset's stations are shown on it. The
+        terrain is the bundled N-choe tile unless ``terrain_path`` points to one made
+        with :func:`opengeostreams.watershed.build_terrain`.
+        """
+        from . import watershed
+        terrain = watershed.load_terrain(terrain_path) if terrain_path else None
+        destination = (Path(save_path).expanduser().resolve() if save_path is not None
+                       else Path(tempfile.gettempdir()) / "opengeostreams-watershed.html")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(watershed.planner_html(watershed.stations_of(self), terrain), encoding="utf-8")
+        if open_browser:
+            webbrowser.open(destination.as_uri())
+        return destination
+
     def dashboard(self, *, host: str = "127.0.0.1", port: int = 4173,
-                  open_browser: bool = True):
-        """Start the Plotly.js/Leaflet dashboard backed by this dataset."""
+                  open_browser: bool = True, watershed_terrain: str | Path | None = None):
+        """Start the Plotly.js/Leaflet dashboard backed by this dataset.
+
+        Its **Watershed analysis** button uses the bundled N-choe terrain, or
+        ``watershed_terrain``: a file made with :func:`opengeostreams.watershed.build_terrain`.
+        """
         from . import server
-        httpd = server.create_server(host, port, dataset=self)
+        httpd = server.create_server(host, port, dataset=self, watershed_terrain=watershed_terrain)
         thread = threading.Thread(target=httpd.serve_forever, daemon=True)
         thread.start()
         httpd.thread = thread

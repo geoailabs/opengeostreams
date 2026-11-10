@@ -4,13 +4,9 @@ River data is modelled along the channels and in the direction of flow, not in
 straight lines (Ver Hoef, Peterson & Theobald 2006; Ver Hoef & Peterson 2010;
 Peterson & Ver Hoef 2010). The library picks the method from what the data has:
 
-1. Tidy the data: one interval per station for every parameter and period. An ordinary
-   reading is a single value; a Min/Max report ("BOD (Min)", "BOD (Max)") is a range.
-   Each station-year uses its ordinary readings when it has any, else its Min and Max,
-   and the all-years bounds are the means of the yearly bounds, so every year counts
-   equally. Everything below runs twice: a lower run (Min where reported) and an upper
-   run (Max where reported), so every map is an interval. A station with only a Max
-   counts in the upper run only (only a Min: lower run only).
+1. Tidy the data: one value per station for every parameter and period, with every
+   year counting equally. "X", "X (Min)" and "X (Max)" are separate parameters, each
+   with its own map from the stations that report it.
 2. Find a river map: the user's own file, then India-WRIS, then a worldwide
    HydroRIVERS file in ``data/hydrorivers/`` (see ``network.network_sources``). If
    none has a line near the stations, straight-line IDW is used and every surface
@@ -39,10 +35,8 @@ Peterson & Ver Hoef 2010). The library picks the method from what the data has:
    on a tree-shaped network (no splits), tail-up, tail-down and mixed stream-network
    kriging (exponential models) are fitted by leave-one-out error, and whichever
    method has the smaller error is kept.
-8. Show the map: lower and upper estimates along the channels with a 0-100 confidence
-   per cell (the dashboard fades low confidence), the method, and the leave-one-out error
-   of each run. ``grid["values"]`` and the surface's top-level method and validation
-   repeat the upper run; ``surface["runs"]`` has both.
+8. Show the map: estimates along the channels with a 0-100 confidence per cell (the
+   dashboard fades low confidence), the method, and the leave-one-out error.
 
 This is a statistical estimate along mapped channels, not a hydraulic model.
 """
@@ -87,8 +81,6 @@ KRIGING_NUGGET_RATIOS = (0.1, 0.3, 0.6)
 MIXED_SHARES = ((0.5, 0.5, 0.0), (0.5, 0.0, 0.5), (0.0, 0.5, 0.5), (1 / 3, 1 / 3, 1 / 3),
                 (0.6, 0.2, 0.2), (0.2, 0.6, 0.2), (0.2, 0.2, 0.6))   # tail-up, tail-down, straight-line
 DOWNSTREAM, UPSTREAM, UNCONNECTED = 1, 2, 3   # where a position lies relative to a station
-BOUNDS = ("lower", "upper")                   # the two runs that make each map an interval
-VARIANT = re.compile(r"\(\s*(max|min)\s*\)\s*$", re.IGNORECASE)
 METHOD_LABELS = {
     "river_idw": "Along-river IDW",
     "tail_up": "Stream-network kriging (tail-up)",
@@ -115,17 +107,15 @@ def _mean(values):
 
 def station_values(records: list[dict[str, Any]], positions: dict[str, tuple[float, float]] | None = None,
                    *, yearly: bool) -> dict[tuple[str, str], tuple[list[dict[str, Any]], str]]:
-    """Group numeric records into one interval per station for each (period, parameter family).
+    """Group numeric records into one value per station for each (period, parameter).
 
-    An ordinary reading gives a single value (lower = upper); "X (Min)" / "X (Max)"
-    readings give a range for parameter X. Each station-year uses its ordinary readings
-    when it has any, otherwise that year's Min and Max. The all-years bounds are the
-    means of the yearly bounds, so every year counts equally. ``kind`` is "reading",
-    "range", "max only" or "min only". ``positions`` gives each station's map position;
-    otherwise its first record's coordinates are used.
+    "X", "X (Min)" and "X (Max)" are separate parameters, each with its own map. A
+    station's all-years value is the mean of its yearly means, so every year counts
+    equally. ``positions`` gives each station's map position; otherwise its first
+    record's coordinates are used.
     """
     positions = positions or {}
-    samples: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {"reading": [], "min": [], "max": []})))
+    samples: dict = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     units: dict[tuple[str, str], str] = {}
     coordinates: dict[str, tuple[float, float]] = {}
     for record in records:
@@ -133,9 +123,8 @@ def station_values(records: list[dict[str, Any]], positions: dict[str, tuple[flo
         if value is None or not math.isfinite(value) or not record.get("parameter") or not record.get("hasCoordinates"):
             continue
         station = record["locationGroup"]
-        variant = VARIANT.search(record["parameter"])
-        key = (str(record["year"]) if yearly else "all_years", pipeline.parameter_family(record["parameter"]))
-        samples[key][station][int(record["year"])]["reading" if not variant else variant.group(1).lower()].append(float(value))
+        key = (str(record["year"]) if yearly else "all_years", record["parameter"])
+        samples[key][station][int(record["year"])].append(float(value))
         units.setdefault(key, pipeline.clean(record.get("unit")))
         coordinates.setdefault(station, (record["latitude"], record["longitude"]))
     result = {}
@@ -145,29 +134,9 @@ def station_values(records: list[dict[str, Any]], positions: dict[str, tuple[flo
             latitude, longitude = positions.get(station) or coordinates[station]
             if not (math.isfinite(latitude) and math.isfinite(longitude)):
                 latitude, longitude = coordinates[station]
-            lows, highs, range_years = [], [], 0
-            for slots in years.values():
-                if slots["reading"]:
-                    reading = _mean(slots["reading"])
-                    lows.append(reading)
-                    highs.append(reading)
-                    continue
-                range_years += 1
-                if slots["min"]:
-                    lows.append(_mean(slots["min"]))
-                if slots["max"]:
-                    highs.append(_mean(slots["max"]))
-            lower, upper = _mean(lows), _mean(highs)
-            if lower is not None and upper is not None and lower > upper:
-                lower, upper = upper, lower
-            kind = ("reading" if not range_years else "range" if lower is not None and upper is not None
-                    else "max only" if lower is None else "min only")
             points.append({"location": station, "latitude": float(latitude), "longitude": float(longitude),
-                           "lower": lower, "upper": upper,
-                           "value": (lower + upper) / 2 if lower is not None and upper is not None
-                           else (upper if lower is None else lower),
-                           "kind": kind, "sampleCount": sum(len(v) for slots in years.values() for v in slots.values()),
-                           "yearCount": len(years)})
+                           "value": _mean([_mean(readings) for readings in years.values()]),
+                           "sampleCount": sum(len(readings) for readings in years.values()), "yearCount": len(years)})
         result[key] = (points, units[key])
     return result
 
@@ -793,6 +762,15 @@ def _idw(distance, relation, share, values, max_m, power, decay_m=None):
     return estimate, confidence
 
 
+def _nearest_station_m(points, context, max_m):
+    """Along-river metres from each target to its nearest flow-connected station (NaN if none)."""
+    columns = [context["index"][point["location"]] for point in points if point["onNetwork"]]
+    distance, relation, share = (context[key][:, columns] for key in ("distance", "relation", "share"))
+    usable = _connected_mask(relation) & (distance <= max_m) & (share > 0)
+    nearest = np.where(usable, distance.astype(float), np.inf).min(axis=1)
+    return np.where(np.isfinite(nearest), nearest, np.nan)
+
+
 def _loo_idw(distance, relation, share, values, max_m, power, decay_m=None):
     relation = relation.copy()
     np.fill_diagonal(relation, 0)
@@ -941,19 +919,18 @@ def _grid_geometry(extent):
     return lat_step, lon_step, lat_step * 111_320.0, lon_step * metres_lon
 
 
-def _grid(extent, max_distance_km, layers, confidence, half_width=None):
-    """Map grid with a lower and an upper layer; ``values`` repeats the upper layer."""
+def _grid(extent, max_distance_km, values, confidence, half_width=None, station_distance_km=None):
     _, _, lat_m, lon_m = _grid_geometry(extent)
     return {"extent": extent, "columns": GRID_COLUMNS, "rows": GRID_ROWS, "maxDistanceKm": max_distance_km,
             "cellSizeM": round(max(lat_m, lon_m), 1), "halfWidthM": round(half_width, 1) if half_width else None,
-            "lower": layers["lower"], "upper": layers["upper"], "values": layers["upper"], "confidence": confidence}
+            "values": values, "confidence": confidence, "stationDistanceKm": station_distance_km}
 
 
-def _paint(latitude, longitude, layers, confidence, stations, max_distance_km):
+def _paint(latitude, longitude, values, confidence, stations, max_distance_km, station_distance_m=()):
     """Draw estimates at river points as a narrow ribbon on the map grid (nearest estimate wins).
 
-    ``layers`` maps "lower"/"upper" to estimates at the points; each station's own cell
-    shows its observed bounds.
+    Each station's own cell shows its observed value. ``station_distance_m`` is the
+    along-river distance from each point to its nearest connected station.
     """
     extent = _extent(list(latitude) + [point["latitude"] for point in stations],
                      list(longitude) + [point["longitude"] for point in stations])
@@ -981,17 +958,16 @@ def _paint(latitude, longitude, layers, confidence, stations, max_distance_km):
         picks.append(np.asarray([count + position]))
     cells, gaps, picks = np.concatenate(cells), np.concatenate(gaps), np.concatenate(picks).astype(int)
     order = np.argsort(-gaps, kind="stable")
-    painted = {}
-    for name in BOUNDS:
-        observed = [np.nan if point.get(name) is None else point[name] for point in stations]
-        full = np.concatenate([np.asarray(layers[name], dtype=float), np.asarray(observed, dtype=float)])
+
+    def painted(at_points, at_stations):
+        full = np.concatenate([np.asarray(at_points, dtype=float), np.asarray(at_stations, dtype=float)])
         grid = np.full(GRID_ROWS * GRID_COLUMNS, np.nan)
         grid[cells[order]] = full[picks[order]]
-        painted[name] = _rounded(grid)
-    full = np.concatenate([np.asarray(confidence, dtype=float), np.ones(len(stations))])
-    shown = np.full(GRID_ROWS * GRID_COLUMNS, np.nan)
-    shown[cells[order]] = full[picks[order]]
-    return _grid(extent, max_distance_km, painted, _percent(shown), half_width)
+        return grid
+
+    kilometres = painted(np.asarray(station_distance_m, dtype=float) / 1000.0, np.zeros(len(stations)))
+    return _grid(extent, max_distance_km, _rounded(painted(values, [point["value"] for point in stations])),
+                 _percent(painted(confidence, np.ones(len(stations)))), half_width, _rounded(np.round(kilometres, 2)))
 
 
 def _rounded(values):
@@ -1037,22 +1013,13 @@ def _model_info(model):
     return info
 
 
-def _empty_run(note):
-    return {"methodKey": None, "method": None, "usedStationCount": 0, "validation": None, "candidates": [],
-            "model": None, "notes": [note]}
-
-
-def _river_run(points, bound, context, options):
-    """One bound along the river: (run summary, estimate at the targets, confidence)."""
+def _river_run(points, context, options):
+    """The map along the river: (run summary, estimate at the targets, confidence)."""
     max_m, power, decay = options["maxM"], options["power"], options["decayM"]
     index = context["index"]
-    targets = len(context["latitude"])
-    used = [point for point in points if point[bound] is not None and point["location"] in index]
-    if not used:
-        return (_empty_run(f"No station with a {bound} bound is on the river map."),
-                np.full(targets, np.nan), np.full(targets, np.nan))
+    used = [point for point in points if point["location"] in index]
     columns = [index[point["location"]] for point in used]
-    used_values = np.asarray([point[bound] for point in used], dtype=float)
+    used_values = np.asarray([point["value"] for point in used], dtype=float)
     used_names = [point["location"] for point in used]
     distance, relation, share = (context[key][:, columns] for key in ("distance", "relation", "share"))
     pairs = np.ix_(columns, columns)
@@ -1101,57 +1068,48 @@ def _river_run(points, bound, context, options):
     return run, estimate, confidence
 
 
-def _straight_run(points, bound, cell_lat, cell_lon, options):
-    """One bound with straight-line IDW over the grid cells: (run summary, estimate, confidence)."""
+def _straight_run(points, cell_lat, cell_lon, options):
+    """The map with straight-line IDW over the grid cells: (run summary, estimate, confidence)."""
     max_m, power, decay = options["maxM"], options["power"], options["decayM"]
-    used = [point for point in points if point[bound] is not None]
-    if not used:
-        return _empty_run(f"No station has a {bound} bound."), np.full(len(cell_lat), np.nan), np.full(len(cell_lat), np.nan)
-    values = np.asarray([point[bound] for point in used], dtype=float)
-    lat = [point["latitude"] for point in used]
-    lon = [point["longitude"] for point in used]
+    values = np.asarray([point["value"] for point in points], dtype=float)
+    lat = [point["latitude"] for point in points]
+    lon = [point["longitude"] for point in points]
     distance = _haversine_m(cell_lat, cell_lon, lat, lon)
     estimate, confidence = _idw(distance, np.full(distance.shape, DOWNSTREAM, dtype=np.int8), np.ones(distance.shape),
                                 values, max_m, power, decay)
     station_distance = _haversine_m(lat, lon, lat, lon)
     loo = _loo_idw(station_distance, np.full(station_distance.shape, DOWNSTREAM, dtype=np.int8),
                    np.ones(station_distance.shape), values, max_m, power, decay)
-    validation = _validation(loo, values, [point["location"] for point in used])
-    run = {"methodKey": "straight_idw", "method": METHOD_LABELS["straight_idw"], "usedStationCount": len(used),
+    validation = _validation(loo, values, [point["location"] for point in points])
+    run = {"methodKey": "straight_idw", "method": METHOD_LABELS["straight_idw"], "usedStationCount": len(points),
            "validation": validation, "model": None, "notes": [],
            "candidates": [{"method": "straight_idw", "label": METHOD_LABELS["straight_idw"], "rmse": validation["rmse"]}]}
     return run, estimate, confidence
 
 
 def _surface(period, parameter, points, unit, context, options):
-    """One map for a parameter and period: a lower and an upper run painted on one grid."""
+    """One map for a parameter and period."""
     index = context["index"] if context else {}
     for point in points:
         point["onNetwork"] = point["location"] in index
     surface = {
         "id": re.sub(r"[^a-z0-9]+", "-", f"{period}:{parameter}".lower()).strip("-"),
-        "parameter": parameter, "parameterFamily": parameter, "unit": unit,
+        "parameter": parameter, "parameterFamily": pipeline.parameter_family(parameter), "unit": unit,
         "year": None if period == "all_years" else int(period), "period": period,
         "pointCount": len(points), "samplePoints": points,
-        "interval": any(point["kind"] != "reading" for point in points),
         "warning": None, "junctionWeights": context["junctionWeights"] if context else None,
     }
     warnings = []
     if len(points) == 1:
-        single = {"methodKey": "single", "method": METHOD_LABELS["single"], "usedStationCount": 1, "validation": None,
-                  "candidates": [], "model": None, "notes": []}
-        runs = {bound: dict(single) for bound in BOUNDS}
-        grid = _paint([], [], {bound: [] for bound in BOUNDS}, [], points, options["maxDistanceKm"])
+        run = {"methodKey": "single", "method": METHOD_LABELS["single"], "usedStationCount": 1, "validation": None,
+               "candidates": [], "model": None, "notes": []}
+        grid = _paint([], [], [], [], points, options["maxDistanceKm"])
     elif context and any(point["onNetwork"] for point in points):
-        runs, layers, confidences = {}, {}, []
-        for bound in BOUNDS:
-            runs[bound], layers[bound], confidence = _river_run(points, bound, context, options)
-            confidences.append(confidence)
-        with np.errstate(invalid="ignore"):
-            confidence = np.fmin(*confidences)  # the weaker of the two runs
-        keep = np.isfinite(layers["lower"]) | np.isfinite(layers["upper"])
-        grid = _paint(context["latitude"][keep], context["longitude"][keep], {bound: layers[bound][keep] for bound in BOUNDS},
-                      confidence[keep], [point for point in points if point["onNetwork"]], options["maxDistanceKm"])
+        run, estimate, confidence = _river_run(points, context, options)
+        keep = np.isfinite(estimate)
+        grid = _paint(context["latitude"][keep], context["longitude"][keep], estimate[keep], confidence[keep],
+                      [point for point in points if point["onNetwork"]], options["maxDistanceKm"],
+                      _nearest_station_m(points, context, options["maxM"])[keep])
         left_out = [point["location"] for point in points if not point["onNetwork"]]
         if left_out:
             warnings.append(f"{len(left_out)} station(s) are not on the river map and were left out: {', '.join(left_out)}.")
@@ -1162,28 +1120,15 @@ def _surface(period, parameter, points, unit, context, options):
         lat_step, lon_step, _, _ = _grid_geometry(extent)
         rows, columns = np.divmod(np.arange(GRID_ROWS * GRID_COLUMNS), GRID_COLUMNS)
         cell_lat, cell_lon = extent["maxLatitude"] - rows * lat_step, extent["minLongitude"] + columns * lon_step
-        runs, layers, confidences = {}, {}, []
-        for bound in BOUNDS:
-            runs[bound], layers[bound], confidence = _straight_run(points, bound, cell_lat, cell_lon, options)
-            confidences.append(confidence)
-        with np.errstate(invalid="ignore"):
-            confidence = np.fmin(*confidences)
-        grid = _grid(extent, options["maxDistanceKm"], {bound: _rounded(layers[bound]) for bound in BOUNDS},
-                     _percent(confidence))
+        run, estimate, confidence = _straight_run(points, cell_lat, cell_lon, options)
+        grid = _grid(extent, options["maxDistanceKm"], _rounded(estimate), _percent(confidence))
         warning = OFF_NETWORK_WARNING if context else NO_NETWORK_WARNING
         if not context and options.get("networkReason"):
             warning += f" ({options['networkReason']})"
         warnings.append(warning)
-    one_sided = {kind: [point["location"] for point in points if point["kind"] == kind] for kind in ("max only", "min only")}
-    if one_sided["max only"]:
-        warnings.append("Only a Max is reported at " + ", ".join(one_sided["max only"]) + ", so it counts for the upper bound only.")
-    if one_sided["min only"]:
-        warnings.append("Only a Min is reported at " + ", ".join(one_sided["min only"]) + ", so it counts for the lower bound only.")
-    main = runs["upper"] if runs["upper"]["methodKey"] else runs["lower"]
-    notes = list(dict.fromkeys(note for bound in BOUNDS for note in runs[bound]["notes"]))
-    surface.update(methodKey=main["methodKey"], method=main["method"], usedStationCount=main["usedStationCount"],
-                   validation=main["validation"], candidates=main["candidates"], model=main["model"], notes=notes,
-                   runs=runs, grid=grid, warning=" ".join(warnings) or None)
+    surface.update(methodKey=run["methodKey"], method=run["method"], usedStationCount=run["usedStationCount"],
+                   validation=run["validation"], candidates=run["candidates"], model=run["model"], notes=run["notes"],
+                   grid=grid, warning=" ".join(warnings) or None)
     return surface
 
 
@@ -1196,9 +1141,8 @@ def _validate(max_distance_km, power, junction_weights):
         raise ValueError(f"junction_weights must be one of {', '.join(JUNCTION_WEIGHTS)}.")
 
 
-def _station_matrices(points, context, bound="upper"):
-    """(values, distance, relation, share) between the stations of one bound of a surface, or None."""
-    points = [point for point in points if point[bound] is not None]
+def _station_matrices(points, context):
+    """(values, distance, relation, share) between the stations of a surface, or None."""
     if context:
         used = [point for point in points if point["location"] in context["index"]]
         columns = [context["index"][point["location"]] for point in used]
@@ -1212,22 +1156,21 @@ def _station_matrices(points, context, bound="upper"):
         matrices = (distance, np.full(distance.shape, DOWNSTREAM, dtype=np.int8), np.ones(distance.shape))
     if len(used) < MIN_STATIONS_TO_CHOOSE:
         return None
-    return (np.asarray([point[bound] for point in used], dtype=float),) + matrices
+    return (np.asarray([point["value"] for point in used], dtype=float),) + matrices
 
 
-def _bound_matrices(groups, context):
-    """Every (surface, bound) with enough stations to be scored."""
+def _scored_surfaces(groups, context):
+    """Every surface with enough stations to be scored."""
     for points, _ in groups.values():
-        for bound in BOUNDS:
-            found = _station_matrices(points, context, bound)
-            if found:
-                yield found
+        found = _station_matrices(points, context)
+        if found:
+            yield found
 
 
 def _no_limit_decay(groups, context) -> float:
     """Confidence fade length without a limit: the longest distance between linked stations."""
     longest = 1000.0
-    for _, distance, relation, _ in _bound_matrices(groups, context):
+    for _, distance, relation, _ in _scored_surfaces(groups, context):
         linked = distance[(relation > 0) & np.isfinite(distance)]
         if len(linked):
             longest = max(longest, float(linked.max()))
@@ -1238,16 +1181,16 @@ def choose_distance(groups, context, power: float = DEFAULT_POWER,
                     candidates=DISTANCE_CANDIDATES_KM) -> dict[str, Any]:
     """Pick the distance limit with the smallest leave-one-out error.
 
-    For both bounds of every all-years surface with at least ``MIN_STATIONS_TO_CHOOSE``
-    stations, each station is hidden and predicted from the others under each limit. A
-    station a limit cannot reach is scored as the mean of the other stations, so a
-    short limit does not win just by skipping hard cases. Errors are divided by each
-    surface's spread (standard deviation) so different parameters can be averaged.
-    Ties go to the shorter limit.
+    For every all-years surface with at least ``MIN_STATIONS_TO_CHOOSE`` stations, each
+    station is hidden and predicted from the others under each limit. A station a limit
+    cannot reach is scored as the mean of the other stations, so a short limit does not
+    win just by skipping hard cases. Errors are divided by each surface's spread
+    (standard deviation) so different parameters can be averaged. Ties go to the
+    shorter limit.
     """
     no_limit_decay = _no_limit_decay(groups, context)
     baseline = []
-    for values, *_ in _bound_matrices(groups, context):
+    for values, *_ in _scored_surfaces(groups, context):
         if np.std(values) > 0:
             baseline.append(float(np.sqrt(np.mean((_others_mean(values) - values) ** 2))) / float(np.std(values)))
     baseline_error = _round(float(np.mean(baseline))) if baseline else None
@@ -1256,7 +1199,7 @@ def choose_distance(groups, context, power: float = DEFAULT_POWER,
         limit_m = math.inf if limit_km is None else limit_km * 1000.0
         decay_m = no_limit_decay if limit_km is None else limit_m
         scores, reached, total = [], 0, 0
-        for values, distance, relation, share in _bound_matrices(groups, context):
+        for values, distance, relation, share in _scored_surfaces(groups, context):
             spread = float(np.std(values))
             if not spread > 0:
                 continue
@@ -1348,15 +1291,18 @@ def compact_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Copy of ``payload`` whose grids list only the painted cells (for the dashboard API).
 
     Each grid gets ``encoding: "sparse"`` with ``cells`` (row-major indices) and matching
-    ``cellLower``, ``cellUpper`` and ``cellConfidence`` instead of the dense layers.
+    ``cellValues``, ``cellConfidence`` and, on river maps, ``cellStationDistanceKm``
+    instead of the dense layers.
     """
     def compact(surface):
         grid = dict(surface["grid"])
-        lower, upper, confidence = grid.pop("lower"), grid.pop("upper"), grid.pop("confidence")
-        grid.pop("values", None)
-        cells = [index for index in range(len(upper)) if upper[index] is not None or lower[index] is not None]
-        grid.update(encoding="sparse", cells=cells, cellLower=[lower[index] for index in cells],
-                    cellUpper=[upper[index] for index in cells], cellConfidence=[confidence[index] for index in cells])
+        values, confidence = grid.pop("values"), grid.pop("confidence")
+        station_distance = grid.pop("stationDistanceKm", None)
+        cells = [index for index in range(len(values)) if values[index] is not None]
+        grid.update(encoding="sparse", cells=cells, cellValues=[values[index] for index in cells],
+                    cellConfidence=[confidence[index] for index in cells])
+        if station_distance is not None:
+            grid["cellStationDistanceKm"] = [station_distance[index] for index in cells]
         return {**surface, "grid": grid}
     surfaces = {key: [compact(surface) for surface in items] for key, items in payload["surfaces"].items()}
     return {**payload, "surfaces": surfaces}

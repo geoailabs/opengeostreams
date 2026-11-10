@@ -396,7 +396,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if urllib.parse.urlparse(self.path).path == "/weather-history":
             self.handle_weather()
             return
+        if route == "/api/watershed":
+            self.handle_watershed()
+            return
         super().do_GET()
+
+    def handle_watershed(self) -> None:
+        """Terrain for the dashboard's Watershed analysis: the server's terrain file, else the bundled tile."""
+        from . import watershed
+        try:
+            terrain = watershed.terrain_json(getattr(self.server, "watershed_terrain", None))
+            self.send_content("application/json", terrain.encode("utf-8"))
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            return
+        except Exception as error:
+            self.log_error("Watershed terrain failed: %s", error)
+            self.send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Could not load the watershed terrain: {error}"})
 
     def handle_upload(self) -> None:
         try:
@@ -578,8 +593,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             })
 
 
-def create_server(host: str = HOST, port: int = PORT, *, dataset=None) -> ThreadingHTTPServer:
+def create_server(host: str = HOST, port: int = PORT, *, dataset=None,
+                  watershed_terrain=None) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer((host, port), DashboardHandler)
+    server.watershed_terrain = watershed_terrain
     server.datasets = {}
     server.active_dataset = None
     server.dataset_lock = threading.Lock()
@@ -590,8 +607,8 @@ def create_server(host: str = HOST, port: int = PORT, *, dataset=None) -> Thread
     return server
 
 
-def run_server(host: str = HOST, port: int = PORT) -> None:
-    server = create_server(host, port)
+def run_server(host: str = HOST, port: int = PORT, *, dataset=None) -> None:
+    server = create_server(host, port, dataset=dataset)
     print(f"OpenGeoStreams dashboard running at http://{host}:{port}")
     print("Use the CSV control in the dashboard to filter all views to an uploaded file.")
     try:
@@ -603,4 +620,12 @@ def run_server(host: str = HOST, port: int = PORT) -> None:
 
 
 if __name__ == "__main__":
-    run_server(port=int(os.environ.get("NCHOE_PORT", PORT)))
+    # Cloud hosts (Render, Hugging Face, Docker) set PORT and need OGS_HOST=0.0.0.0.
+    # OGS_DATASET optionally preloads a CSV so visitors open a dashboard with data.
+    preload = os.environ.get("OGS_DATASET")
+    if preload:
+        from .dataset import load_csv
+        preload = load_csv(preload, rows="all")
+    run_server(host=os.environ.get("OGS_HOST", HOST),
+               port=int(os.environ.get("PORT") or os.environ.get("NCHOE_PORT") or PORT),
+               dataset=preload)

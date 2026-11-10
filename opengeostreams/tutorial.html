@@ -251,8 +251,7 @@ data.interpolate()   # along the river</code></pre>
 
   <h3>How a value is filled in along the river</h3>
   <ol class="steps">
-    <li><strong>One interval per station.</strong> An ordinary reading is one value; a Min/Max report is a range. Every year counts equally.</li>
-    <li><strong>Two runs, one interval.</strong> The map is built once with the Min of every range (the lower bound) and once with the Max (the upper bound), so stations that only report a range still count. A station with only a Max counts for the upper bound only.</li>
+    <li><strong>One value per station.</strong> Every year counts equally. BOD, BOD (Min) and BOD (Max) are kept as separate parameters, each with its own map.</li>
     <li><strong>Average the connected stations.</strong> Each point on the river averages the stations upstream and downstream of it. Nearer stations, and stations that supplied more of its water, count more.</li>
     <li><strong>Let the data choose the reach.</strong> Limits of 2, 4, 8, 16 and 32 km and no limit are tested, and the one that predicts best is kept.</li>
     <li><strong>Check itself.</strong> Each station is hidden in turn and predicted from the others. The map reports the typical miss and a <em>skill</em> score: above 0 means it beats simply averaging the other stations.</li>
@@ -270,7 +269,7 @@ data.interpolate()   # along the river</code></pre>
     <tr><td>Left panel</td><td>Your files (import, combine, download), parameters and the station list</td><td><code>dataset.py</code>, <code>pipeline.py</code></td></tr>
     <tr><td>Map: station dots</td><td>Each station, coloured pass / caution / fail for the chosen use</td><td><code>qualitycheck.py</code></td></tr>
     <tr><td>Map: blue lines</td><td>The drains and rivers each station was matched to</td><td><code>network.py</code></td></tr>
-    <tr><td>Map: coloured ribbon</td><td>Estimated values along the river, faded where confidence is low. A Lower / Upper switch picks the bound; click for the full interval</td><td><code>interpolation.py</code></td></tr>
+    <tr><td>Map: coloured ribbon</td><td>Estimated values along the river, faded where confidence is low. Click for a short estimate</td><td><code>interpolation.py</code></td></tr>
     <tr><td>Use-case card</td><td>Fitness for drinking, farming, aquatic life or bathing, with reasons</td><td><code>qualitycheck.py</code></td></tr>
     <tr><td>Analysis drawer: Trend</td><td>The parameter over time, with rainfall bars</td><td><code>plots.py</code> + Open-Meteo</td></tr>
     <tr><td>Analysis drawer: Distribution</td><td>Box plots by year or month</td><td><code>plots.py</code></td></tr>
@@ -331,7 +330,7 @@ data.interpolate()   # along the river</code></pre>
   <dl class="glossary">
     <dt>Station</dt><dd>A place where water samples are taken.</dd>
     <dt>Parameter</dt><dd>What is measured: pH, BOD, nitrate, coliform and so on.</dd>
-    <dt>Min / Max readings</dt><dd>The lowest and highest value reported for a period. They give the lower and upper bound of the map's interval.</dd>
+    <dt>Min / Max readings</dt><dd>The lowest and highest value reported for a period. They are separate parameters with their own maps.</dd>
     <dt>Choe, nallah, drain</dt><dd>Local names for seasonal streams and drainage channels.</dd>
     <dt>Upstream / downstream</dt><dd>Towards the source / towards where the water ends up. Labels U/S and D/S.</dd>
     <dt>Junction / off-take</dt><dd>Where two channels meet / where a canal takes water out of a river.</dd>

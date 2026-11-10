@@ -366,7 +366,7 @@ def _surface(dataset, parameter=None, year=None):
     collection = dataset._interpolation["surfaces"]["yearly" if year is not None else "allYears"]
     choices = [item for item in collection if year is None or item["year"] == year]
     if parameter:
-        # One surface per parameter family; "BOD (Max)" finds the BOD surface (its upper bound).
+        # "BOD (Max)" has its own surface; a family with only Min/Max is found by its family name.
         wanted = pipeline.normalize_parameter(parameter).casefold()
         exact = [item for item in choices if item["parameter"].casefold() == wanted]
         family = pipeline.parameter_family(parameter).casefold()
@@ -377,20 +377,10 @@ def _surface(dataset, parameter=None, year=None):
     return choices[0]
 
 
-def _bound(parameter, bound):
-    """The bound to draw: as asked, else "lower" for "X (Min)", else "upper"."""
-    if bound is not None:
-        if bound not in ("lower", "upper"):
-            raise ValueError('bound must be "lower" or "upper".')
-        return bound
-    return "lower" if parameter and str(parameter).strip().lower().endswith("(min)") else "upper"
-
-
-def _surface_arrays(surface, bound="upper"):
+def _surface_arrays(surface):
     grid = surface["grid"]
-    layer = grid.get(bound) or grid["values"]
     values = np.asarray([
-        np.nan if value is None else float(value) for value in layer
+        np.nan if value is None else float(value) for value in grid["values"]
     ]).reshape(grid["rows"], grid["columns"])
     extent = grid["extent"]
     longitude = np.linspace(extent["minLongitude"], extent["maxLongitude"], grid["columns"])
@@ -404,25 +394,19 @@ def _surface_confidence(surface):
     return np.asarray([np.nan if value is None else float(value) for value in confidence]).reshape(grid["rows"], grid["columns"])
 
 
-def interpolation_figure(dataset, parameter=None, year=None, bound=None):
-    """Interactive interpolation raster coloured by the lower or upper bound (default upper).
-
-    Hovering shows both bounds and the confidence.
-    """
+def interpolation_figure(dataset, parameter=None, year=None):
+    """Interactive interpolation raster; hovering shows the estimate and the confidence."""
     go = _go()
-    bound = _bound(parameter, bound)
     surface = _surface(dataset, parameter, year)
-    _grid, values, longitude, latitude = _surface_arrays(surface, bound)
-    _, lower, _, _ = _surface_arrays(surface, "lower")
-    _, upper, _, _ = _surface_arrays(surface, "upper")
+    _grid, values, longitude, latitude = _surface_arrays(surface)
     figure = go.Figure(go.Heatmap(
         x=longitude, y=latitude, z=values, colorscale="Turbo",
-        customdata=np.dstack([lower, upper, _surface_confidence(surface)]),
+        customdata=_surface_confidence(surface),
         colorbar=dict(title=surface.get("unit") or "Value"),
         hovertemplate=(
             "Longitude: %{x:.5f}<br>Latitude: %{y:.5f}<br>"
-            "Estimate: %{customdata[0]:.3g} to %{customdata[1]:.3g}<br>"
-            "Confidence: %{customdata[2]:.0f}%<extra></extra>"
+            "Estimate: %{z:.3g}<br>"
+            "Confidence: %{customdata:.0f}%<extra></extra>"
         ),
     ))
     points = surface["samplePoints"]
@@ -437,7 +421,7 @@ def interpolation_figure(dataset, parameter=None, year=None, bound=None):
         hovertemplate="Location: %{text}<br>Longitude: %{x:.5f}<br>Latitude: %{y:.5f}<extra></extra>",
     ))
     period = year if year is not None else "all years"
-    validation = ((surface.get("runs") or {}).get(bound) or {}).get("validation") or surface.get("validation") or {}
+    validation = surface.get("validation") or {}
     error, skill = validation.get("rmse"), validation.get("skill")
     subtitle = surface.get("method", "")
     if error is not None:
@@ -445,8 +429,7 @@ def interpolation_figure(dataset, parameter=None, year=None, bound=None):
     if skill is not None:
         subtitle += (f" · {skill:.0%} better than the station average" if skill > 0
                      else " · no better than the station average")
-    label = f"{surface['parameter']} ({bound} bound)" if surface.get("interval") else surface["parameter"]
-    _style(figure, f"{label} interpolation - {period}<br><sup>{subtitle}</sup>",
+    _style(figure, f"{surface['parameter']} interpolation - {period}<br><sup>{subtitle}</sup>",
            "Longitude", "Latitude")
     if surface.get("warning"):
         figure.add_annotation(text="⚠ " + surface["warning"], xref="paper", yref="paper", x=0, y=-0.16,
@@ -482,8 +465,8 @@ def _rgba_surface(values):
     return rgba, minimum, maximum
 
 
-def map_figure(dataset, parameter=None, bound=None):
-    """Interactive Leaflet OpenStreetMap with the interpolation raster (lower or upper bound)."""
+def map_figure(dataset, parameter=None):
+    """Interactive Leaflet OpenStreetMap with the interpolation raster."""
     try:
         import folium
         from branca.colormap import LinearColormap
@@ -500,8 +483,7 @@ def map_figure(dataset, parameter=None, bound=None):
         zoom_start=11, tiles="OpenStreetMap", control_scale=True,
     )
     surface = _surface(dataset, parameter)
-    bound = _bound(parameter, bound)
-    grid, values, _longitude, _latitude = _surface_arrays(surface, bound)
+    grid, values, _longitude, _latitude = _surface_arrays(surface)
     extent = grid["extent"]
     rgba, minimum, maximum = _rgba_surface(values)
     folium.raster_layers.ImageOverlay(

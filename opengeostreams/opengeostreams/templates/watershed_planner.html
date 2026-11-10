@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watershed Analysis</title>
+<!-- Standalone copy of the OpenGeoStreams dashboard's Watershed analysis
+     (RiverDataset.watershed_planner). The panel and analysis are dashboard_assets/watershed.js. -->
+<!--ASSETS_HEAD-->
+<style>
+/* The dashboard's colour tokens, which watershed.css uses. */
+:root,:root[data-theme="dark"]{color-scheme:dark;
+  --bg:#0c0d0f;--surface:#151618;--surface-2:#1c1d20;--surface-3:#26282c;--border:#2a2c31;--border-strong:#3a3d44;
+  --text:#ececef;--muted:#8a8a94;--accent:#2dd4bf;--accent-text:#5eead4;--accent-soft:rgba(45,212,191,.12);--on-accent:#042f2a;
+  --danger:#f87171;--warning:#fbbf24;--success:#4ade80}
+:root[data-theme="light"]{color-scheme:light;
+  --bg:#eef0f2;--surface:#fff;--surface-2:#f4f4f5;--surface-3:#e8e8eb;--border:#e4e4e7;--border-strong:#d4d4d8;
+  --text:#18181b;--muted:#71717a;--accent:#0f766e;--accent-text:#0f766e;--accent-soft:rgba(15,118,110,.1);--on-accent:#fff;
+  --danger:#dc2626;--warning:#b45309;--success:#15803d}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.45 Manrope,"Segoe UI",system-ui,sans-serif}
+.app{display:grid;grid-template-columns:minmax(340px,420px) 1fr;height:100%}
+.side{overflow:auto;padding:14px;border-right:1px solid var(--border)}
+.side h1{margin:0 0 10px;font-size:18px}
+#map{height:100%;width:100%}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip,.leaflet-control-layers{background:var(--surface);color:var(--text)}
+.leaflet-popup-content a{color:var(--accent)}
+.toast{position:fixed;left:50%;bottom:18px;z-index:2000;padding:8px 14px;border-radius:6px;background:var(--text);color:var(--bg);font-size:13px;transform:translateX(-50%)}
+@media (max-width:820px){.app{grid-template-columns:1fr;grid-template-rows:60vh auto;height:auto}#map{order:-1;height:60vh}.side{border:0}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side"><h1>Watershed analysis</h1><div id="panel"></div></aside>
+  <div id="map"></div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<!--ASSETS_SCRIPTS-->
+<script>/*DATA*/</script>
+<script>
+(function () {
+  if (window.matchMedia("(prefers-color-scheme: light)").matches) document.documentElement.dataset.theme = "light";
+  const D = window.PLANNER_DATA;
+  const map = L.map("map", {preferCanvas: true});
+  const base = {
+    "Satellite": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {maxZoom: 19, attribution: "Imagery © Esri, Maxar, Earthstar Geographics"}),
+    "Topographic": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {maxZoom: 19, attribution: "© Esri"}),
+    "OpenStreetMap": L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "© OpenStreetMap contributors"}),
+  };
+  base.Satellite.addTo(map);
+  L.control.layers(base).addTo(map);
+  map.fitBounds([[D.lat0 - D.H * D.res, D.lon0], [D.lat0, D.lon0 + D.W * D.res]]);
+  const toastEl = document.getElementById("toast"); let timer;
+  const notify = message => {toastEl.textContent = message; toastEl.hidden = false; clearTimeout(timer); timer = setTimeout(() => toastEl.hidden = true, 3500);};
+  OGSWatershed.create({map, root: document.getElementById("panel"), data: D, stations: D.stations, showStations: true, notify})
+    .then(planner => planner.show())
+    .catch(error => {document.getElementById("panel").textContent = "Could not start: " + error.message; console.error(error);});
+})();
+</script>
+</body>
+</html>

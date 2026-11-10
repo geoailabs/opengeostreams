@@ -177,7 +177,6 @@
   let interpolationData = null;
   let interpolationOverlay = null;
   let interpolationEnabled = true;
-  let interpolationBound = "upper";
   let interpolationRequest = null;
 
   function clearLibraryFigure(kind, element, empty, message) {
@@ -944,15 +943,6 @@
     refreshInterpolationOverlay();
   });
 
-  // Lower / Upper switch for maps built from Min/Max ranges.
-  document.getElementById("interp-bound")?.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-interp-bound]");
-    if (!button || button.dataset.interpBound === interpolationBound) return;
-    interpolationBound = button.dataset.interpBound;
-    map.closePopup();
-    refreshInterpolationOverlay();
-  });
-
   function refreshBaseMapButtons() {
     els.basemapToggle.querySelectorAll("[data-basemap]").forEach((button) => {
       button.classList.toggle("is-active", button.dataset.basemap === state.baseMap);
@@ -1032,34 +1022,23 @@
 
   // Query the active Python-generated interpolation grid at a clicked map position.
   map.on("click", (event) => {
-    if (!interpolationEnabled) return;
+    // No interpolation popups while an area is being drawn for Watershed analysis.
+    if (!interpolationEnabled || document.body.classList.contains("ws-drawing")) return;
     const estimate = getInterpolationEstimateAt(event.latlng);
     if (!estimate) return;
-    const periodLabel = estimate.surface.year == null
-      ? "All available years"
-      : String(estimate.surface.year);
-    const run = getInterpolationRun(estimate.surface);
-    const error = (run.validation || estimate.surface.validation)?.rmse;
+    const error = estimate.surface.validation?.rmse;
     const unit = estimate.surface.unit ? ` ${estimate.surface.unit}` : "";
-    const sameBounds = estimate.lower != null && estimate.upper != null && Math.abs(estimate.upper - estimate.lower) < 1e-9;
-    const valueText = sameBounds || !estimate.surface.interval
-      ? formatCompactNumber(estimate.value ?? estimate.upper ?? estimate.lower)
-      : `${estimate.lower == null ? "?" : formatCompactNumber(estimate.lower)} to ${estimate.upper == null ? "?" : formatCompactNumber(estimate.upper)}`;
-    L.popup({ className: "interpolation-value-popup", maxWidth: 260 })
+    const details = [
+      "Estimate",
+      estimate.stationDistanceKm == null ? "" : `Station ${estimate.stationDistanceKm.toFixed(1)} km along river`,
+      Number.isFinite(error) ? `±${formatCompactNumber(error)}${unit}` : "",
+    ].filter(Boolean).join(" · ");
+    L.popup({ className: "interpolation-value-popup", maxWidth: 340 })
       .setLatLng(event.latlng)
       .setContent([
         '<div class="interpolation-estimate">',
-        '<strong>Interpolated estimate</strong>',
-        `<span>${escapeHtml(estimate.surface.parameterFamily || estimate.surface.parameter)}</span>`,
-        `<b>${escapeHtml(valueText)}${estimate.surface.unit ? ` ${escapeHtml(estimate.surface.unit)}` : ""}</b>`,
-        estimate.surface.interval && !sameBounds ? "<small>Lower bound uses Min readings, upper bound uses Max readings where only a range was reported.</small>" : "",
-        `<small>Period: ${escapeHtml(periodLabel)}</small>`,
-        estimate.confidence == null ? "" : `<small>Confidence: ${escapeHtml(String(estimate.confidence))}%</small>`,
-        Number.isFinite(error)
-          ? `<small>Typical error (leave-one-out): ±${escapeHtml(formatCompactNumber(error))}${escapeHtml(unit)}</small>`
-          : "",
-        `<small>${escapeHtml(run.method || estimate.surface.method)}; this is an estimate, not an observed sample.</small>`,
-        estimate.surface.warning ? `<small>⚠ ${escapeHtml(estimate.surface.warning)}</small>` : "",
+        `<b>${escapeHtml(estimate.surface.parameter)}: ${escapeHtml(formatCompactNumber(estimate.value))}${escapeHtml(unit)}</b>`,
+        `<small>${escapeHtml(details)}</small>`,
         '</div>',
       ].join(""))
       .openOn(map);
@@ -2415,38 +2394,16 @@
         const grid = surface.grid;
         if (!grid || grid.encoding !== "sparse") continue;
         const size = grid.rows * grid.columns;
-        grid.lower = new Array(size).fill(null);
-        grid.upper = new Array(size).fill(null);
+        grid.values = new Array(size).fill(null);
         grid.confidence = new Array(size).fill(null);
+        grid.stationDistanceKm = new Array(size).fill(null);
         grid.cells.forEach((cell, index) => {
-          grid.lower[cell] = grid.cellLower[index];
-          grid.upper[cell] = grid.cellUpper[index];
+          grid.values[cell] = grid.cellValues[index];
           grid.confidence[cell] = grid.cellConfidence[index];
+          grid.stationDistanceKm[cell] = grid.cellStationDistanceKm?.[index] ?? null;
         });
-        grid.values = grid.upper;
       }
     }
-  }
-
-  // Each surface is an interval: a lower run (Min where reported) and an upper run (Max).
-  // The Lower / Upper switch picks which one colours the map.
-  function getInterpolationLayer(surface) {
-    return surface?.grid?.[interpolationBound] || surface?.grid?.values || [];
-  }
-
-  function getInterpolationRun(surface) {
-    return surface?.runs?.[interpolationBound] || surface;
-  }
-
-  function syncInterpolationBoundButtons(surface) {
-    const control = document.getElementById("interp-bound");
-    if (!control) return;
-    control.hidden = !surface?.interval;
-    control.querySelectorAll("[data-interp-bound]").forEach((button) => {
-      const active = button.dataset.interpBound === interpolationBound;
-      button.classList.toggle("is-active", active);
-      button.setAttribute("aria-pressed", String(active));
-    });
   }
 
   // Pick the raster surface that best matches the current parameter/year selection.
@@ -2497,14 +2454,14 @@
     const column = Math.max(0, Math.min(grid.columns - 1,
       Math.round(((latlng.lng - extent.minLongitude) / (longitudeSpan || 1)) * (grid.columns - 1))));
     const cell = (row * grid.columns) + column;
-    const lower = grid.lower?.[cell] ?? grid.values[cell];
-    const upper = grid.upper?.[cell] ?? grid.values[cell];
-    const value = getInterpolationLayer(surface)[cell];
+    const value = grid.values[cell];
     const confidence = grid.confidence?.[cell];
-    if (!Number.isFinite(lower) && !Number.isFinite(upper)) return null;
+    const stationDistanceKm = grid.stationDistanceKm?.[cell];
+    if (!Number.isFinite(value)) return null;
     return {
-      value, lower: Number.isFinite(lower) ? lower : null, upper: Number.isFinite(upper) ? upper : null,
-      confidence: Number.isFinite(confidence) ? confidence : null, surface, row, column,
+      value,
+      confidence: Number.isFinite(confidence) ? confidence : null,
+      stationDistanceKm: Number.isFinite(stationDistanceKm) ? stationDistanceKm : null, surface, row, column,
     };
   }
 
@@ -2552,8 +2509,7 @@
       return;
     }
     const surface = getInterpolationSurface();
-    syncInterpolationBoundButtons(surface);
-    if (!getInterpolationLayer(surface).length) {
+    if (!surface?.grid?.values?.length) {
       status.textContent = !dashboardData.records.length ? "Import a CSV to view interpolation." : !interpolationData ? "Loading interpolation..." : "No interpolation for this parameter and year.";
       return;
     }
@@ -2569,19 +2525,15 @@
       [surface.grid.extent.maxLatitude, surface.grid.extent.maxLongitude],
     ];
 
-    const values = getInterpolationLayer(surface).filter(Number.isFinite);
+    const values = surface.grid.values.filter(Number.isFinite);
     const minimum = Math.min(...values);
     const maximum = Math.max(...values);
     legend.hidden = false;
     legend.textContent = `${formatCompactNumber(minimum)} \u2013 ${formatCompactNumber(maximum)} ${surface.unit || ""}`;
-    const run = getInterpolationRun(surface);
-    const validation = run.validation || surface.validation;
+    const validation = surface.validation;
     const error = validation?.rmse;
     const errorText = Number.isFinite(error)
       ? ` Leave-one-out error \u00b1${formatCompactNumber(error)}${surface.unit ? ` ${surface.unit}` : ""} (${validation.checkedCount} of ${validation.stationCount} stations checked).`
-      : "";
-    const boundText = surface.interval
-      ? ` Showing the ${interpolationBound} bound (${interpolationBound === "upper" ? "Max" : "Min"} where only a range was reported).`
       : "";
     const skill = validation?.skill;
     const skillText = !Number.isFinite(skill) ? ""
@@ -2592,7 +2544,7 @@
     const reachText = interpolationData?.method?.distanceMeasuredAlong === "river"
       ? ` Reach: ${reach == null ? "no limit" : `${formatCompactNumber(reach)} km`} along the river${chosen}.`
       : "";
-    status.textContent = `${surface.parameter} \u00b7 ${surface.year ?? "All years"}. ${run.method || surface.method}.${boundText}${reachText}${errorText}${skillText} Faded colour means low confidence. Click the coloured area for an estimate.${surface.warning ? ` \u26a0 ${surface.warning}` : ""}`;
+    status.textContent = `${surface.parameter} \u00b7 ${surface.year ?? "All years"}. ${surface.method}.${reachText}${errorText}${skillText} Faded colour means low confidence. Click the coloured area for an estimate.${surface.warning ? ` \u26a0 ${surface.warning}` : ""}`;
 
     // Leaflet places the generated PNG over the geographic bounds of the interpolation grid.
     interpolationOverlay = L.imageOverlay(imageUrl, bounds, {
@@ -2607,7 +2559,7 @@
   // value into one pixel of an off-screen canvas and then export that canvas as an image.
   function buildInterpolationImage(surface) {
     const grid = surface.grid;
-    const layer = getInterpolationLayer(surface);
+    const layer = grid.values;
     const validValues = layer.filter((value) => Number.isFinite(value));
     if (!validValues.length || !grid.columns || !grid.rows) {
       return null;

@@ -20,3 +20,6 @@ data/indiawris/
 # Local assistant/scratch output
 Claude outputs/
 .tmp_check/
+
+# Cloudflare deploy (wrangler) local state
+.wrangler/

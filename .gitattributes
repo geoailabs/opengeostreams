@@ -1,0 +1,2 @@
+# Bundled third-party files are pinned by SRI hashes in index.html: keep their bytes exactly as shipped.
+opengeostreams/opengeostreams/dashboard_assets/vendor/** -text

@@ -12,6 +12,10 @@
   const hasData = Array.isArray(data.records) && data.records.length > 0;
   const mobileQuery = window.matchMedia("(max-width: 900px)");
   const $ = (id) => document.getElementById(id);
+  // Which view the right drawer shows ("analysis" or "watershed"), and the planner once loaded.
+  let drawerMode = "analysis";
+  let planner = null;
+  let plannerLoading = null;
 
   function store(key, value) {
     try {
@@ -64,9 +68,77 @@
 
   function setAnalysisOpen(open, persist = true) {
     shell.classList.toggle("analysis-collapsed", !open);
-    $("toggle-analysis").setAttribute("aria-expanded", String(open));
-    $("toggle-analysis").classList.toggle("is-active", open);
     if (persist) store("ogs-analysis-open", open ? "1" : "0");
+    syncDrawer();
+  }
+
+  /* ---------- Right drawer: Analysis or Watershed analysis ---------- */
+
+  // The drawer shows one of the two. Watershed analysis draws its layers on the
+  // dashboard map while it is showing, and takes them off again when it is not.
+
+  function drawerShowing(mode) {
+    return drawerMode === mode && !shell.classList.contains("analysis-collapsed");
+  }
+
+  function syncDrawer() {
+    $("analysis-drawer").classList.toggle("is-watershed", drawerMode === "watershed");
+    for (const [id, mode] of [["toggle-analysis", "analysis"], ["open-watershed", "watershed"]]) {
+      $(id).setAttribute("aria-expanded", String(drawerShowing(mode)));
+      $(id).classList.toggle("is-active", drawerShowing(mode));
+    }
+    if (planner) {
+      if (drawerShowing("watershed")) planner.show();
+      else planner.hide();
+    }
+  }
+
+  function openDrawer(mode) {
+    drawerMode = mode;
+    setAnalysisOpen(true, mode === "analysis");
+    if (mode === "watershed") loadPlanner();
+    setTimeout(afterLayoutChange, 260);
+  }
+
+  function toggleDrawer(mode) {
+    if (drawerShowing(mode)) {
+      setAnalysisOpen(false, mode === "analysis");
+      setTimeout(afterLayoutChange, 260);
+    } else {
+      openDrawer(mode);
+    }
+  }
+
+  // The terrain (about 1.3 MB) is fetched the first time Watershed analysis opens.
+  function loadPlanner() {
+    if (plannerLoading) return plannerLoading;
+    const body = $("watershed-body");
+    const stations = (data.locations || [])
+      .filter((location) => location.hasCoordinates && location.latitude != null && location.longitude != null)
+      .map((location) => ({ name: location.name, lat: Number(location.latitude), lon: Number(location.longitude) }));
+    plannerLoading = fetch("/api/watershed")
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || response.statusText);
+        return payload;
+      })
+      .then((terrain) => window.OGSWatershed.create({
+        map: window.OGS.map,
+        root: body,
+        data: terrain,
+        stations,
+        notify: (message) => toast(message, toneFor(message)),
+      }))
+      .then((created) => {
+        planner = created;
+        syncDrawer();
+        return created;
+      })
+      .catch((error) => {
+        plannerLoading = null;
+        body.innerHTML = `<p class="ws-hint ws-err">Could not load the watershed analysis: ${escapeHtml(error.message)}</p>`;
+      });
+    return plannerLoading;
   }
 
   function setImportOpen(open) {
@@ -84,18 +156,17 @@
     setLayersOpen(shell.classList.contains("layers-collapsed"));
     setTimeout(afterLayoutChange, 260);
   });
-  $("toggle-analysis").addEventListener("click", () => {
-    setAnalysisOpen(shell.classList.contains("analysis-collapsed"));
-    setTimeout(afterLayoutChange, 260);
-  });
+  $("toggle-analysis").addEventListener("click", () => toggleDrawer("analysis"));
+  $("open-watershed").addEventListener("click", () => toggleDrawer("watershed"));
   $("close-analysis").addEventListener("click", () => {
-    setAnalysisOpen(false);
+    setAnalysisOpen(false, drawerMode === "analysis");
     setTimeout(afterLayoutChange, 260);
   });
+
   // On phones the analysis sheet header works as a pull tab.
   document.querySelector(".drawer-header").addEventListener("click", (event) => {
     if (!mobileQuery.matches || event.target.closest("button")) return;
-    setAnalysisOpen(shell.classList.contains("analysis-collapsed"));
+    setAnalysisOpen(shell.classList.contains("analysis-collapsed"), drawerMode === "analysis");
   });
   $("add-data-toggle").addEventListener("click", () => setImportOpen($("import-panel").hidden));
   $("empty-add-data").addEventListener("click", () => {

@@ -169,14 +169,9 @@ data, summary = data.interpolate(max_distance_km=5)   # or a fixed limit along t
 data, summary = data.interpolate(network_path="my_drains.gpkg", advanced=True)
 ```
 
-1. **Tidy the data.** One interval per station for each parameter and period.
-   An ordinary reading is a single value; a Min/Max report (`BOD (Min)`,
-   `BOD (Max)`) is a range. Each station-year uses its ordinary readings when it
-   has any, otherwise its Min and Max, and the all-years bounds are the means of
-   the yearly bounds, so every year counts equally. Every map is then built
-   twice: a **lower** run (Min where reported) and an **upper** run (Max), so the
-   result is an interval and no range station is left out. A station with only a
-   Max counts for the upper bound only, and says so.
+1. **Tidy the data.** One value per station for each parameter and period, with
+   every year counting equally. `BOD`, `BOD (Min)` and `BOD (Max)` are separate
+   parameters, each with its own map built from the stations that report it.
 2. **Find a river map.** Your own line file (`network_path` or the
    `OPENGEOSTREAMS_NETWORK` variable) first, then India-WRIS (small drains in
    India), then any HydroRIVERS file you put in `data/hydrorivers/`. Shapefile,
@@ -214,11 +209,51 @@ data, summary = data.interpolate(network_path="my_drains.gpkg", advanced=True)
    kriging are fitted too, and whichever method has the smallest leave-one-out
    error is kept.
 9. **Show the map.** Values are coloured along the channels, faded where
-   confidence is low, with the method, reach, error and skill beside them. A
-   Lower / Upper switch picks which bound colours the map; clicking the river
-   shows the whole interval. In Python, `data.plot(parameter="BOD", bound="lower")`
-   (the default is the upper bound; `parameter="BOD (Min)"` picks the lower).
+   confidence is low, with the method, reach, error and skill beside them. The
+   dashboard map shows the ordinary readings of the selected parameter (Min/Max
+   only when it has nothing else). In Python, pick any of them with
+   `data.plot(parameter="BOD (Max)")`.
 
 Canals run in rotation and can be dry, so a canal sample reflects its source
 river only while the canal runs; surfaces that use a canal station say so.
 This is a statistical estimate along mapped channels, not a hydraulic model.
+
+## Watershed analysis
+
+The **Watershed analysis** button next to **Analysis** in the dashboard switches the
+right-hand panel to the sampling planner, which works on the dashboard's own map.
+Choose an area in one of three ways: **click a stream** (or pick a station) to take
+all the land that drains to that point, **drag a box**, or **draw a shape**. Then it:
+
+1. splits the area into **watersheds**, starting a new one wherever two streams
+   join and wherever a stream crosses your boundary;
+2. finds each watershed's **pour point**, the single cell all its water drains out of;
+3. picks the pour points where field **samples** tell you most about your area,
+   adding them one at a time (Sharp's method for monitoring networks, weighted by
+   land use), and recommends how many to take.
+
+A sample close to one of the dataset's stations says so. Press **Analysis** to go
+back; the watershed layers come off the map and return with the same result when
+you reopen it. Results download as GeoJSON, CSV or KML for Google Earth. The same
+panel can also be saved as one file that works offline:
+
+```python
+data.watershed_planner("planner.html", open_browser=True)
+```
+
+Streams come from the elevation: the tile is depression-filled (priority-flood),
+every cell gets one downhill direction (D8), and a cell is a stream once the
+drainage area set on the page flows through it. The library ships a 30 m SRTM tile
+for the N-choe (Chandigarh-Mohali) with OpenStreetMap land use. For another area,
+build a terrain file from a lat/lon elevation GeoTIFF, and optionally land use
+fetched with `tools/osm_landuse_fetch.js` (update its grid numbers to the new tile):
+
+```python
+from opengeostreams import watershed
+watershed.build_terrain("dem.tif", "landuse.json", out_path="my_terrain.json",
+                        name="My river", landuse_source="OpenStreetMap")
+data.dashboard(watershed_terrain="my_terrain.json")        # in the dashboard
+data.watershed_planner("planner.html", terrain_path="my_terrain.json")   # standalone
+```
+
+The land-use pollution weights are starting assumptions, not measured loads.

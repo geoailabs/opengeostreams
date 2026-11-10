@@ -1,0 +1,181 @@
+/* Watershed analysis panel (watershed.js). Uses the dashboard's colour tokens
+   (--surface, --text, --border, --accent, ...), so it follows the dark and light themes. */
+
+.ws-panel {
+  --ws-rec: #ea580c;
+  --ws-extra: var(--muted);
+  --ws-hi: var(--danger);
+  --ws-med: var(--warning);
+  --ws-lo: var(--success);
+  --ws-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.ws-panel [hidden] { display: none !important; }
+.ws-intro { margin: 0; color: var(--muted); font-size: 12.5px; }
+.ws-intro b { color: var(--text); }
+
+.ws-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.ws-lbl {
+  color: var(--accent-text, var(--accent));
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ws-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ws-hint { color: var(--muted); font-size: 12.5px; }
+.ws-hint b { color: var(--text); }
+.ws-hint select { margin-left: 4px; }
+.ws-mono { font-family: var(--ws-mono); }
+.ws-err { color: var(--danger); }
+
+.ws-btn,
+.ws-panel select {
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ws-btn:hover,
+.ws-panel select:hover { border-color: var(--accent); }
+.ws-btn.primary { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+.ws-btn:focus-visible,
+.ws-panel select:focus-visible,
+.ws-shed:focus-visible,
+.ws-pt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-panel input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+.ws-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ws-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 9px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ws-mode b { font-size: 12.5px; }
+.ws-mode span { color: var(--muted); font-size: 11px; line-height: 1.3; }
+.ws-mode:hover { border-color: var(--accent); }
+.ws-mode.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.ws-mode.on b { color: var(--accent-text, var(--accent)); }
+.ws-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-station-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ws-station-pick select { max-width: 100%; }
+@media (max-width: 420px) { .ws-modes { grid-template-columns: 1fr; } }
+
+.ws-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ws-stats .v { display: block; font: 600 18px var(--ws-mono); }
+.ws-stats .k { color: var(--muted); font-size: 11.5px; }
+
+.ws-lubar { display: flex; height: 12px; overflow: hidden; border-radius: 3px; background: var(--surface-2); }
+.ws-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 10px; font-size: 12px; }
+.ws-legend div { display: flex; align-items: center; gap: 6px; }
+.ws-legend .pc { margin-left: auto; color: var(--muted); font: 11.5px var(--ws-mono); }
+.ws-sw { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 2px; }
+
+.ws-chip { display: inline-block; padding: 1px 6px; border: 1px solid currentColor; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.ws-chip.hi { color: var(--ws-hi); }
+.ws-chip.med { color: var(--ws-med); }
+.ws-chip.lo { color: var(--ws-lo); }
+
+.ws-tag { display: inline-block; padding: 1px 5px; border-radius: 3px; background: var(--surface-2); color: var(--muted); font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.ws-tag.Outlet { background: rgba(234, 88, 12, 0.16); color: #f97316; }
+.ws-tag.Inflow { background: rgba(37, 99, 235, 0.16); color: #60a5fa; }
+.ws-tag.Junction { background: var(--accent-soft); color: var(--accent-text, var(--accent)); }
+:root[data-theme="light"] .ws-tag.Outlet { color: #9a3412; }
+:root[data-theme="light"] .ws-tag.Inflow { color: #1e40af; }
+
+.ws-scroll { max-height: 300px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+.ws-panel table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ws-panel th { position: sticky; top: 0; padding: 5px 6px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-align: left; text-transform: uppercase; }
+.ws-panel td { padding: 5px 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ws-panel td.n,
+.ws-panel th.n { font-family: var(--ws-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.ws-shed { cursor: pointer; }
+.ws-shed:hover,
+.ws-shed.on { background: var(--surface-2); }
+
+.ws-plan { display: flex; flex-direction: column; gap: 6px; }
+.ws-pt { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--border); border-left: 4px solid var(--ws-rec); border-radius: 6px; background: var(--surface); cursor: pointer; }
+.ws-pt.extra { border-left-color: var(--ws-extra); }
+.ws-pt:hover,
+.ws-pt.on { background: var(--surface-2); }
+.ws-pt .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.ws-pt .id { font: 600 13px var(--ws-mono); }
+.ws-pt .ty { font-weight: 600; }
+.ws-pt .pr { margin-left: auto; color: var(--ws-rec); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.ws-pt.extra .pr { color: var(--ws-extra); }
+.ws-pt .why { color: var(--muted); font-size: 12.5px; }
+.ws-pt .meta { display: flex; flex-wrap: wrap; gap: 10px; color: var(--muted); font: 12px var(--ws-mono); }
+
+.ws-curve { display: block; width: 100%; height: auto; }
+.ws-curve text { fill: var(--muted); font: 10px var(--ws-mono); }
+.ws-curve line { stroke: var(--border); }
+.ws-curve line.axis { stroke: var(--border-strong, var(--muted)); }
+.ws-curve rect { fill: var(--surface-3, var(--border)); }
+.ws-curve rect.on { fill: var(--accent); }
+
+.ws-layers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; font-size: 12.5px; }
+.ws-check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.ws-check input { accent-color: var(--accent); }
+.ws-key { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; color: var(--muted); font-size: 12px; }
+.ws-key div { display: flex; align-items: center; gap: 7px; }
+.ws-key .ws-pin { width: 14px; height: 14px; border-width: 1.5px; }
+
+.ws-panel details summary { font-size: 13px; font-weight: 600; cursor: pointer; }
+.ws-panel details p { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; }
+
+.ws-busy {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 65%, transparent);
+  font-weight: 600;
+}
+
+/* Map symbols (Leaflet divIcons). */
+.ws-pin { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 2px solid #fff; border-radius: 50% 50% 50% 0; background: #c2410c; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); transform: rotate(-45deg); }
+.ws-pin span { color: #fff; font: 600 11px "JetBrains Mono", ui-monospace, Consolas, monospace; transform: rotate(45deg); }
+.ws-pin.extra { background: #6b7c79; }
+.ws-pin.on { outline: 3px solid #000; }
+.ws-pp { width: 11px; height: 11px; border: 2px solid #111; border-radius: 50%; background: #fff; }
+.ws-pp.Outlet { background: #ea580c; }
+.ws-pp.Inflow { background: #2563eb; }
+.ws-pp.Outside { border-color: #555; background: #9ca3af; }
+.ws-stn { width: 11px; height: 11px; border: 2px solid #111; background: #fde047; transform: rotate(45deg); }
+.ws-src { width: 10px; height: 10px; border: 1.5px solid #fff; box-shadow: 0 0 2px #000; }
+.ws-pixel { image-rendering: pixelated; }

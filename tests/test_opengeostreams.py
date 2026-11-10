@@ -654,7 +654,7 @@ class RiverInterpolationTests(unittest.TestCase):
         self.assertIn("just below the Side Drain junction", info["MAIN RIVER D/S OF SIDE DRAIN"]["positionFrom"])
         self.assertEqual(self.relation(graph, "MAIN RIVER D/S OF SIDE DRAIN", "D1 drain")[1], 1)
 
-    def test_min_max_ranges_become_intervals_year_by_year(self):
+    def test_min_and_max_are_separate_parameters(self):
         from opengeostreams.opengeostreams import interpolation
         data = ogs.from_dataframe(pd.DataFrame({
                 "Parameter": ["BOD (Max)", "BOD (Min)", "BOD", "BOD", "BOD", "BOD", "BOD (Max)", "BOD (Min)", "BOD (Max)"],
@@ -664,50 +664,59 @@ class RiverInterpolationTests(unittest.TestCase):
             "Date": ["01-01-2023", "01-01-2023", "01-01-2023", "01-01-2024", "01-02-2024", "01-03-2024",
                      "01-01-2024", "01-01-2024", "01-01-2024"]}))
         groups = interpolation.station_values(data._dashboard_data["records"], yearly=False)
-        self.assertEqual({key[1] for key in groups}, {"BOD"})  # one map per parameter, not one per Min/Max
-        points = {point["location"]: point for point in groups[("all_years", "BOD")][0]}
-        # A: ordinary readings win in 2023 (6, the Min/Max are ignored) and 2024 (8); years count equally.
-        self.assertEqual((points["A"]["lower"], points["A"]["upper"], points["A"]["kind"]), (7.0, 7.0, "reading"))
-        self.assertEqual(points["A"]["yearCount"], 2)
-        self.assertEqual((points["B"]["lower"], points["B"]["upper"], points["B"]["kind"]), (10.0, 20.0, "range"))
-        self.assertEqual((points["C"]["lower"], points["C"]["upper"], points["C"]["kind"]), (None, 40.0, "max only"))
+        self.assertEqual({key[1] for key in groups}, {"BOD", "BOD (Max)", "BOD (Min)"})
+        values = {name: {point["location"]: point["value"] for point in groups[("all_years", name)][0]}
+                  for name in ("BOD", "BOD (Max)", "BOD (Min)")}
+        self.assertEqual(values["BOD"], {"A": 7.0})     # 2023 (6) and 2024 (8) count equally
+        self.assertEqual(values["BOD (Max)"], {"A": 9.0, "B": 20.0, "C": 40.0})
+        self.assertEqual(values["BOD (Min)"], {"A": 1.0, "B": 10.0})
+        self.assertEqual(groups[("all_years", "BOD")][0][0]["yearCount"], 2)
 
-    def test_interval_runs_use_min_for_lower_and_max_for_upper(self):
-        stations = [("S1 upstream", 30.18, 76.0, 10.0), ("S2 below off-take", 30.12, 76.0, 20.0),
-                    ("S4 below junction", 30.05, 76.0, 30.0)]
-        rows = [{"Parameter": "pH", "Value": value, "Location": name, "Latitude": lat, "Longitude": lon,
-                 "Date": "01-01-2024"} for name, lat, lon, value in stations]
-        rows += [{"Parameter": "pH (Min)", "Value": 12, "Location": "R range", "Latitude": 30.15, "Longitude": 76.0,
-                  "Date": "01-01-2024"},
-                 {"Parameter": "pH (Max)", "Value": 28, "Location": "R range", "Latitude": 30.15, "Longitude": 76.0,
-                  "Date": "01-01-2024"},
-                 {"Parameter": "pH (Max)", "Value": 50, "Location": "M max only", "Latitude": 30.08, "Longitude": 76.0,
-                  "Date": "01-01-2024"}]
+    def test_grid_reports_along_river_distance_to_nearest_station(self):
+        rows = [{"Parameter": "pH", "Value": value, "Location": name, "Latitude": lat, "Longitude": 76.0,
+                 "Date": "01-01-2024"} for name, lat, value in [("Up", 30.18, 7.0), ("Down", 30.12, 8.0)]]
         from opengeostreams.opengeostreams import interpolation
+        data = ogs.from_dataframe(pd.DataFrame(rows))
+        payload = interpolation.build_interpolation_data(data._dashboard_data["records"], max_distance_km=20,
+                                                         graph=self.graph(data, lines=self.lines(canal=False)))
+        (surface,) = payload["surfaces"]["allYears"]
+        grid = surface["grid"]
+        lat_step, lon_step, _, _ = interpolation._grid_geometry(grid["extent"])
+
+        def distance_at(latitude):
+            row = round((grid["extent"]["maxLatitude"] - latitude) / lat_step)
+            column = round((76.0 - grid["extent"]["minLongitude"]) / lon_step)
+            return grid["stationDistanceKm"][row * grid["columns"] + column]
+
+        self.assertEqual(distance_at(30.18), 0)                   # a station's own cell
+        self.assertAlmostEqual(distance_at(30.15), 3.34, delta=0.2)   # halfway along 6.7 km of river
+        (compact,) = interpolation.compact_payload(payload)["surfaces"]["allYears"]
+        self.assertEqual(len(compact["grid"]["cellStationDistanceKm"]), len(compact["grid"]["cells"]))
+        self.assertNotIn("stationDistanceKm", compact["grid"])
+
+    def test_min_and_max_get_their_own_surfaces(self):
+        rows = [{"Parameter": parameter, "Value": value, "Location": name, "Latitude": lat, "Longitude": 76.0,
+                 "Date": "01-01-2024"}
+                for parameter, name, lat, value in [
+                    ("pH", "S1 upstream", 30.18, 10.0), ("pH", "S2 below off-take", 30.12, 20.0),
+                    ("pH", "S4 below junction", 30.05, 30.0), ("pH (Min)", "R range", 30.15, 12.0),
+                    ("pH (Max)", "R range", 30.15, 28.0), ("pH (Max)", "M max only", 30.08, 50.0)]]
+        from opengeostreams.opengeostreams import interpolation
+        from opengeostreams.opengeostreams.plots import interpolation_figure
         data = ogs.from_dataframe(pd.DataFrame(rows))
         graph = self.graph(data, lines=self.lines(canal=False))
         payload = interpolation.build_interpolation_data(data._dashboard_data["records"], graph=graph,
                                                          max_distance_km=20)
-        (surface,) = payload["surfaces"]["allYears"]
-        self.assertTrue(surface["interval"])
-        self.assertEqual(surface["runs"]["lower"]["usedStationCount"], 4)   # the Max-only station is left out
-        self.assertEqual(surface["runs"]["upper"]["usedStationCount"], 5)
-        self.assertIn("Only a Max is reported at M max only", surface["warning"])
-        lower = {item["location"]: item["observed"] for item in surface["runs"]["lower"]["validation"]["stations"]}
-        upper = {item["location"]: item["observed"] for item in surface["runs"]["upper"]["validation"]["stations"]}
-        self.assertEqual((lower["R range"], upper["R range"]), (12.0, 28.0))
-        grid = surface["grid"]
-        pairs = [(low, high) for low, high in zip(grid["lower"], grid["upper"]) if low is not None and high is not None]
-        self.assertTrue(pairs)
-        self.assertTrue(all(low <= high + 1e-9 for low, high in pairs))
-        self.assertTrue(any(high > low + 1e-6 for low, high in pairs))
-        self.assertEqual(grid["values"], grid["upper"])
-        compact = interpolation.compact_payload(payload)["surfaces"]["allYears"][0]["grid"]
-        self.assertEqual(len(compact["cellLower"]), len(compact["cellUpper"]))
-        from opengeostreams.opengeostreams.plots import interpolation_figure
+        surfaces = {surface["parameter"]: surface for surface in payload["surfaces"]["allYears"]}
+        self.assertEqual({name: surface["usedStationCount"] for name, surface in surfaces.items()},
+                         {"pH": 3, "pH (Max)": 2, "pH (Min)": 1})
+        self.assertEqual(surfaces["pH (Max)"]["parameterFamily"], "pH")
+        self.assertNotIn("lower", surfaces["pH"]["grid"])
+        compact = {surface["parameter"]: surface["grid"] for surface in interpolation.compact_payload(payload)["surfaces"]["allYears"]}
+        self.assertEqual(len(compact["pH"]["cellValues"]), len(compact["pH"]["cells"]))
         data._interpolation = payload
-        self.assertIn("lower bound", interpolation_figure(data, parameter="pH", bound="lower").layout.title.text)
-        self.assertIn("upper bound", interpolation_figure(data, parameter="pH (Max)").layout.title.text)
+        self.assertIn("pH (Max) interpolation", interpolation_figure(data, parameter="pH (Max)").layout.title.text)
+        self.assertIn("pH interpolation", interpolation_figure(data, parameter="pH").layout.title.text)
 
     def test_auto_distance_picks_the_smallest_leave_one_out_error(self):
         from opengeostreams.opengeostreams import interpolation
@@ -1189,3 +1198,108 @@ class QualityCheckTests(unittest.TestCase):
         (sample,) = quality["samples"]["A"].values()
         self.assertEqual(sample["bathing"]["status"], "unsafe")
         self.assertEqual(sample["bathing"]["reasons"], ["pH 9.1 outside 6.5-8.5"])
+
+
+class WatershedPlannerTests(unittest.TestCase):
+    STATIONS = pd.DataFrame({"Parameter": ["BOD", "BOD"], "Value": [10, 20], "Date": ["01-01-2024", "01-01-2024"],
+                             "Location": ["On tile", "Far away"], "Latitude": [30.65, 12.0], "Longitude": [76.72, 77.0]})
+
+    def test_read_geotiff_shifts_point_registered_rasters_half_a_cell(self):
+        from PIL import TiffImagePlugin
+        from opengeostreams.opengeostreams import watershed
+        tags = TiffImagePlugin.ImageFileDirectory_v2()
+        tags[33550], tags.tagtype[33550] = (0.5, 0.5, 0.0), 12
+        tags[33922], tags.tagtype[33922] = (0.0, 0.0, 0.0, 10.0, 20.0, 0.0), 12
+        tags[34735], tags.tagtype[34735] = (1, 1, 0, 3, 1024, 0, 1, 2, 1025, 0, 1, 2, 2048, 0, 1, 4326), 3
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "tile.tif"
+            Image.fromarray(np.arange(12, dtype=np.float32).reshape(3, 4)).save(path, tiffinfo=tags)
+            elevation, transform = watershed.read_geotiff(path)
+        self.assertEqual(elevation.shape, (3, 4))
+        self.assertEqual(transform, (0.5, 0.0, 9.75, 0.0, -0.5, 20.25))   # corner, not centre, of the first cell
+
+    def test_flow_network_fills_pits_and_every_cell_drains_off_the_tile(self):
+        from opengeostreams.opengeostreams import watershed
+        rows, columns = np.mgrid[0:7, 0:7]
+        dem = 100.0 + rows + columns          # slopes down to the top-left corner
+        dem[3, 3] = 50.0                       # a pit that would trap water without filling
+        flow = watershed.flow_network(dem, (0.001, 0.0, 76.0, 0.0, -0.001, 30.0))
+        interior = flow["fdir"][1:-1, 1:-1]
+        self.assertTrue((interior != watershed.OFF_GRID).all())
+        outlets = flow["fdir"] == watershed.OFF_GRID
+        self.assertEqual(flow["accumulation"][outlets].sum(), dem.size)   # all water leaves the tile
+        self.assertEqual(flow["accumulation"].max(), flow["accumulation"][0, 0])
+
+    def test_bundled_terrain_and_standalone_page(self):
+        from opengeostreams.opengeostreams import watershed
+        terrain = watershed.load_terrain()
+        self.assertEqual((terrain["W"], terrain["H"]), (757, 906))
+        self.assertTrue(terrain["hasLU"] and terrain["example"])
+        stations = watershed.stations_of(ogs.from_dataframe(self.STATIONS))
+        page = watershed.planner_html(stations)
+        data = json.loads(page.split("window.PLANNER_DATA=", 1)[1].split(";</script>", 1)[0])
+        self.assertEqual(sorted(name for name, _, _ in data["stations"]), ["Far away", "On tile"])
+        self.assertNotIn("<!--ASSETS", page)
+        self.assertNotIn('src="', page)                       # everything, including watershed.js, is inlined
+        self.assertIn("window.OGSWatershed", page)
+
+    def test_dashboard_serves_terrain_and_has_the_watershed_panel(self):
+        dataset = ogs.from_dataframe(self.STATIONS)
+        httpd = dataset.dashboard(port=0, open_browser=False)
+        try:
+            base = "http://127.0.0.1:" + str(httpd.server_port)
+            terrain = json.load(urllib.request.urlopen(base + "/api/watershed"))
+            self.assertEqual((terrain["W"], terrain["H"]), (757, 906))
+            for asset in ("/watershed.js", "/watershed.css", "/vendor/leaflet-draw/leaflet.draw.js"):
+                self.assertEqual(urllib.request.urlopen(base + asset).status, 200)
+            index = urllib.request.urlopen(base + "/").read().decode("utf-8")
+            self.assertIn('id="open-watershed"', index)
+            self.assertIn('id="watershed-body"', index)
+            self.assertNotIn("iframe", index)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+        with tempfile.TemporaryDirectory() as folder:
+            saved = dataset.watershed_planner(Path(folder) / "planner.html")
+            self.assertIn("Watershed analysis", saved.read_text(encoding="utf-8"))
+
+    def test_browser_watershed_runs_on_the_dashboard_map(self):
+        from playwright.sync_api import sync_playwright
+        httpd = ogs.from_dataframe(self.STATIONS).dashboard(port=0, open_browser=False)
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(channel='chrome', headless=True)
+                page = browser.new_page(viewport={"width": 1440, "height": 900})
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                page.goto("http://127.0.0.1:" + str(httpd.server_port), timeout=60000)
+                page.wait_for_function("window.OGS && window.OGS.map", timeout=60000)
+                page.click("#open-watershed")
+                page.wait_for_function("window.__planner && window.__planner.active", timeout=60000)
+                self.assertEqual(page.evaluate("document.querySelectorAll('iframe').length"), 0)
+                self.assertTrue(page.locator("#watershed-body").is_visible())
+                self.assertTrue(page.locator("#analysis-body").is_hidden())
+                page.click("#watershed-body [data-ws=example]")
+                page.wait_for_function("window.__planner.result && window.__planner.result.samples", timeout=60000)
+                result = page.evaluate("({sheds: window.__planner.result.sheds.length, rec: window.__planner.result.rec})")
+                self.assertEqual(result, {"sheds": 32, "rec": 7})   # same as the original N-choe planner
+                pins = page.locator("#map .ws-pin").count()
+                self.assertEqual(pins, 7)                           # samples are drawn on the dashboard's own map
+                page.evaluate("__planner.pickPoint(30.6420, 76.7190)")   # click a stream: all land draining to it
+                page.wait_for_function("window.__planner.result.polyArea > 12 && window.__planner.result.samples", timeout=60000)
+                types = set(page.evaluate("__planner.result.sheds.map(s => s.type)"))
+                self.assertTrue(types <= {"Outlet", "Junction"})      # a catchment has no inflows or edge strips
+                self.assertIn("drains to", page.locator("[data-ws=drawHint]").inner_text())
+                page.click("#watershed-body [data-ws=example]")
+                page.wait_for_function("window.__planner.result && window.__planner.result.sheds.length === 32", timeout=60000)
+                page.click("#toggle-analysis")                     # back to Analysis: the planner's layers come off
+                self.assertTrue(page.locator("#analysis-body").is_visible())
+                self.assertEqual(page.locator("#map .ws-pin").count(), 0)
+                self.assertFalse(page.evaluate("window.__planner.active"))
+                page.click("#open-watershed")                      # and come back with the same result
+                self.assertEqual(page.locator("#map .ws-pin").count(), 7)
+                self.assertEqual(errors, [])
+                browser.close()
+        finally:
+            httpd.shutdown()
+            httpd.server_close()

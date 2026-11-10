@@ -525,10 +525,21 @@ h1, h2, h3, p {
   flex: 1;
 }
 
-.btn-analysis.is-active {
+.btn-analysis.is-active,
+.btn-watershed.is-active {
   border-color: var(--accent-ring);
   color: var(--accent-text);
   background: var(--accent-soft);
+}
+
+/* The right drawer shows either Analysis or Watershed analysis (ui.js sets .is-watershed). */
+.analysis-drawer:not(.is-watershed) .watershed-only,
+.analysis-drawer.is-watershed .analysis-only {
+  display: none !important;
+}
+
+body.ws-drawing .leaflet-container {
+  cursor: crosshair;
 }
 
 .theme-icon-dark {
@@ -2824,22 +2835,12 @@ body.is-busy .map-area::after {
 .interpolation-estimate {
   display: grid;
   gap: 2px;
-}
-
-.interpolation-estimate > strong {
-  color: var(--muted);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.interpolation-estimate > span {
-  color: var(--text-2);
+  white-space: nowrap;
 }
 
 .interpolation-estimate > b {
   color: var(--text);
-  font-size: 18px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2944,11 +2945,13 @@ body.is-busy .map-area::after {
     max-width: 44vw;
   }
 
-  .btn-analysis span {
+  .btn-analysis span,
+  .btn-watershed span {
     display: none;
   }
 
-  .btn-analysis {
+  .btn-analysis,
+  .btn-watershed {
     width: 32px;
     padding: 0;
   }
@@ -3033,16 +3036,6 @@ body.is-busy .map-area::after {
     transition: none !important;
     animation: none !important;
   }
-}
-
-/* Lower / Upper switch for interval (Min/Max) interpolation maps */
-.interp-bound {
-  justify-self: start;
-  margin-top: 2px;
-}
-
-.interp-bound[hidden] {
-  display: none;
 }
 
 /* Station pins: transparent wrapper with a soft drop shadow under the SVG teardrop. */

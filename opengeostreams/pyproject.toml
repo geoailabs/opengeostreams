@@ -21,4 +21,5 @@ include = ["opengeostreams*"]
 
 [tool.setuptools.package-data]
 opengeostreams = ["dashboard_assets/*", "dashboard_assets/vendor/leaflet/*", "dashboard_assets/vendor/leaflet/images/*",
-                  "reference_data/*"]
+                  "dashboard_assets/vendor/leaflet-draw/*", "dashboard_assets/vendor/leaflet-draw/images/*",
+                  "reference_data/*", "templates/*"]
