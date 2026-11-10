@@ -16,6 +16,7 @@ dist/
 
 # Large river network (157 MB, over GitHub's 100 MB limit) - download separately, see README
 data/indiawris/
+data/hydrorivers/
 
 # Local assistant/scratch output
 Claude outputs/
