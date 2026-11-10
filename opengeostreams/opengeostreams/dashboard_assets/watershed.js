@@ -163,7 +163,7 @@ async function create(options) {
     .filter(s => s.r >= 0 && s.r < H && s.c >= 0 && s.c < W);
   const srcCount = new Uint16Array(N); sources.forEach(s => srcCount[s.r * W + s.c]++);
   $("tileNote").innerHTML = `Terrain: <b>${escHtml(D.name || "elevation tile")}</b>.` + (stations.length && !onTile
-    ? ` <span class="ws-err">None of your ${stations.length} stations are on this tile; build terrain for your area with <span class="ws-mono">opengeostreams.watershed.build_terrain()</span>.</span>` : "");
+    ? ` <span class="ws-err">Watershed analysis is only available inside the dashed box on the map, and none of your ${stations.length} stations are in it. Other areas need their own terrain file (made with <span class="ws-mono">opengeostreams.watershed.build_terrain()</span>).</span>` : "");
   $("dataNote").innerHTML = `<b>Data:</b> elevation tile ${escHtml(D.name || "")} with cells of about ${Math.round(D.dy)} m. ` +
     (D.hasLU ? `Land use and point sources from ${escHtml(D.landuseSource || "OpenStreetMap")}. Farmland is often barely mapped in OpenStreetMap, so rural land may show as unmapped.`
       : "No land-use map was supplied, so every cell counts as unmapped land.") + " The planner only works inside the elevation tile shown by the dashed box.";

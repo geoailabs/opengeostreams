@@ -47,6 +47,8 @@ DEFAULT_MAX_DISTANCE_KM = 2.0
 NETWORK_ENV = "OPENGEOSTREAMS_NETWORK"
 NETWORK_CANDIDATES = (
     pipeline.PROJECT_ROOT / "data" / "indiawris" / "WRIS_Rivers_2024.parquet",
+    # All of India, lines simplified by ~10 m and packed for area reads (tools/pack_wris.py).
+    pipeline.PACKAGE_ROOT / "reference_data" / "indiawris_rivers_2024.parquet",
     pipeline.PACKAGE_ROOT / "reference_data" / "indiawris_punjab_channels_2024.shp",
 )
 HYDRORIVERS_DIR = pipeline.PROJECT_ROOT / "data" / "hydrorivers"
@@ -225,13 +227,14 @@ def _geo():
 def network_sources(path: str | Path | None = None) -> list[Path]:
     """Existing network files in order of preference.
 
-    The user's own file (``path``, then ``OPENGEOSTREAMS_NETWORK``) comes first, then
-    India-WRIS (small drains in India), then any worldwide HydroRIVERS file placed in
-    ``data/hydrorivers/`` (large rivers anywhere; it leaves out streams under 10 km²).
+    The user's own file (``path``, then ``OPENGEOSTREAMS_NETWORK``, which may list several
+    files separated by ``os.pathsep``) comes first, then India-WRIS (small drains in
+    India), then any worldwide HydroRIVERS file placed in ``data/hydrorivers/`` (large
+    rivers anywhere; it leaves out streams under 10 km²).
     """
     candidates = [Path(path)] if path else []
     if os.environ.get(NETWORK_ENV):
-        candidates.append(Path(os.environ[NETWORK_ENV]))
+        candidates.extend(Path(item) for item in os.environ[NETWORK_ENV].split(os.pathsep) if item.strip())
     candidates.extend(NETWORK_CANDIDATES)
     if HYDRORIVERS_DIR.is_dir():
         candidates.extend(sorted(item for item in HYDRORIVERS_DIR.rglob("*")
@@ -261,20 +264,30 @@ def load_network(bounds: tuple[float, float, float, float], path: str | Path | N
                  buffer_deg: float = 0.25):
     """Read network lines intersecting ``bounds`` (min lon, min lat, max lon, max lat).
 
+    An explicit ``path`` is used as given. Otherwise each file from
+    :func:`network_sources` is tried in order and the first with lines in the area
+    is used, so India-WRIS serves India and a worldwide file (HydroRIVERS) the rest.
     Results are cached in memory per file and (rounded) area, so importing more
     files from the same region does not re-read the network.
     """
     gpd, _ = _geo()
-    source = find_network_path(path)
+    sources = [find_network_path(path)] if path else network_sources()
+    if not sources:
+        find_network_path()  # raises the "no network file" message
     minx, miny, maxx, maxy = bounds
     box = tuple(round(value, 1) for value in (minx - buffer_deg, miny - buffer_deg, maxx + buffer_deg, maxy + buffer_deg))
-    cache_key = (str(source.resolve()), source.stat().st_mtime, box)
-    if cache_key in _NETWORK_CACHE:
-        return _NETWORK_CACHE[cache_key].copy()
-    result = _read_network(source, box, gpd)
-    if len(_NETWORK_CACHE) >= 4:
-        _NETWORK_CACHE.pop(next(iter(_NETWORK_CACHE)))
-    _NETWORK_CACHE[cache_key] = result
+    result = None
+    for source in sources:
+        cache_key = (str(source.resolve()), source.stat().st_mtime, box)
+        if cache_key in _NETWORK_CACHE:
+            result = _NETWORK_CACHE[cache_key]
+        else:
+            result = _read_network(source, box, gpd)
+            if len(_NETWORK_CACHE) >= 4:
+                _NETWORK_CACHE.pop(next(iter(_NETWORK_CACHE)))
+            _NETWORK_CACHE[cache_key] = result
+        if len(result):
+            break
     return result.copy()
 
 

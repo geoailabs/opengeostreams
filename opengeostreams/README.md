@@ -173,8 +173,11 @@ data, summary = data.interpolate(network_path="my_drains.gpkg", advanced=True)
    every year counting equally. `BOD`, `BOD (Min)` and `BOD (Max)` are separate
    parameters, each with its own map built from the stations that report it.
 2. **Find a river map.** Your own line file (`network_path` or the
-   `OPENGEOSTREAMS_NETWORK` variable) first, then India-WRIS (small drains in
-   India), then any HydroRIVERS file you put in `data/hydrorivers/`. Shapefile,
+   `OPENGEOSTREAMS_NETWORK` variable, which can list several files) first, then
+   India-WRIS (small drains in India; a copy for all of India, simplified by
+   about 10 m, is bundled with the package), then any HydroRIVERS file you put
+   in `data/hydrorivers/`. The first file with rivers near the stations is
+   used. Shapefile,
    GeoPackage and GeoParquet line files work, including OpenStreetMap waterway
    exports. If no map has a channel within 2 km of the stations, straight-line
    IDW is used and every surface says so.

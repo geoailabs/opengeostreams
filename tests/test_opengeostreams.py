@@ -497,7 +497,10 @@ class GeneralRiverInterpolationTests(unittest.TestCase):
 
     def test_one_value_per_station_and_straight_line_fallback(self):
         data = self.dataset()
-        with patch.dict(os.environ, {"OPENGEOSTREAMS_OFFLINE": "1"}):
+        from opengeostreams.opengeostreams import network
+        # A worldwide HydroRIVERS file in data/hydrorivers/ would cover these stations.
+        with patch.dict(os.environ, {"OPENGEOSTREAMS_OFFLINE": "1"}), \
+                patch.object(network, "HYDRORIVERS_DIR", Path(tempfile.gettempdir()) / "ogs-no-hydrorivers"):
             _, summary = data.interpolate(max_distance_km=30)
         surfaces = data._interpolation["surfaces"]["allYears"]
         ph = next(surface for surface in surfaces if surface["parameter"] == "pH")

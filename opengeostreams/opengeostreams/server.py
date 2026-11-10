@@ -206,6 +206,21 @@ def process_uploaded_csv(filename: str, payload: bytes, rows: int | str = "all")
     return dataset
 
 
+def add_dataset(server, entry) -> str:
+    """Store an imported dataset as the active one; call with ``server.dataset_lock`` held.
+
+    ``OGS_MAX_DATASETS`` (unset: no limit) keeps only the newest imports, so a shared
+    hosted server with little memory drops the oldest instead of running out.
+    """
+    dataset_id = uuid.uuid4().hex
+    server.datasets[dataset_id] = entry
+    server.active_dataset = dataset_id
+    limit = int(os.environ.get("OGS_MAX_DATASETS") or 0)
+    while limit > 0 and len(server.datasets) > limit:
+        server.datasets.pop(next(iter(server.datasets)))
+    return dataset_id
+
+
 def dataset_entry(dataset, name: str) -> dict[str, Any]:
     return {"name": name, "dataset": dataset, "figures": OrderedDict(),
             "figure_lock": threading.Lock(), "chart_locks": {kind: threading.Lock() for kind in ("trend", "distribution", "stream", "interpolation")},
@@ -424,9 +439,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 row_limit = "all" if row_limit == "all" else int(row_limit)
                 dataset = process_uploaded_csv(filename, payload, rows=row_limit)
                 data = {"summary": dataset.summary}
-                dataset_id = uuid.uuid4().hex
-                self.server.datasets[dataset_id] = dataset_entry(dataset, filename)
-                self.server.active_dataset = dataset_id
+                dataset_id = add_dataset(self.server, dataset_entry(dataset, filename))
                 warm_network(self.server.datasets[dataset_id])
             self.send_json(HTTPStatus.OK, {
                 "ok": True, "fileName": filename, "summary": data["summary"],
@@ -492,9 +505,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                               station=station.strip() if station else None)
             combined._import_metadata = {"combinedFrom": [entry["name"] for entry in entries]}
             with self.server.dataset_lock:
-                dataset_id = uuid.uuid4().hex
-                self.server.datasets[dataset_id] = dataset_entry(combined, name)
-                self.server.active_dataset = dataset_id
+                dataset_id = add_dataset(self.server, dataset_entry(combined, name))
                 warm_network(self.server.datasets[dataset_id])
             summary = combined.summary
             merged = sum(len(item["merged"]) for item in summary.get("mergedLocations", []))
