@@ -21,7 +21,7 @@
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
   >
   <link rel="stylesheet" href="./vendor/leaflet-draw/leaflet.draw.css">
-  <link rel="stylesheet" href="./styles.css?v=20261108-ws">
+  <link rel="stylesheet" href="./styles.css?v=20261123">
   <link rel="stylesheet" href="./watershed.css?v=20261108-ws">
 </head>
 <body>
@@ -32,6 +32,7 @@
     <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></symbol>
     <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 18.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3"/><path d="M7 15h10"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.4-2.5 2.4M12 16.5h.01"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
@@ -72,6 +73,9 @@
         <svg class="i"><use href="#i-pin"/></svg><span><b id="mapped-count">0</b> mapped</span>
       </div>
       <span class="topbar-spacer"></span>
+      <button type="button" class="icon-btn" id="tour-open" title="Quick tour: what each button does">
+        <svg class="i"><use href="#i-help"/></svg><span class="sr-only">Start the quick tour</span>
+      </button>
       <button type="button" class="icon-btn" id="about-open" title="About OpenGeoStreams">
         <svg class="i"><use href="#i-info"/></svg><span class="sr-only">About OpenGeoStreams</span>
       </button>
@@ -150,6 +154,10 @@
         <div class="legend-body">
           <div class="legend-layer">
             <label class="switch-row"><span>Stations</span><input type="checkbox" id="show-stations" class="switch" checked></label>
+            <div class="legend-items marker-key" aria-label="Station marker shapes">
+              <div><svg class="marker-key-icon" viewBox="0 0 24 34" aria-hidden="true"><path d="M12 1.2C6 1.2 1.2 6 1.2 12c0 7.6 9 18.4 10.1 19.7a.9.9 0 0 0 1.4 0C13.8 30.4 22.8 19.6 22.8 12 22.8 6 18 1.2 12 1.2z"/><circle cx="12" cy="12" r="4.2"/></svg>Sampling station</div>
+              <div><svg class="marker-key-icon" viewBox="0 0 24 34" aria-hidden="true"><path d="M4.4 1.4h15.2a3 3 0 0 1 3 3v15.4a3 3 0 0 1-3 3h-4.5l-2.4 8.6a.8.8 0 0 1-1.4 0l-2.4-8.6H4.4a3 3 0 0 1-3-3V4.4a3 3 0 0 1 3-3z"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>Sewage treatment plant (STP)</div>
+            </div>
           </div>
           <div class="legend-layer">
             <label class="switch-row"><span>Interpolation</span><input type="checkbox" id="map-interpolation-toggle" class="switch" checked></label>
@@ -403,8 +411,9 @@
   <script src="/plotly.min.js"></script>
   <script src="./dashboard-data.js?v=20260824-empty-state"></script>
   <script src="./ui.js?v=20261108-ws"></script>
-  <script src="./app.js?v=20261108-ws"></script>
-  <script src="./watershed.js?v=20261108-ws"></script>
+  <script src="./app.js?v=20261123"></script>
+  <script src="./watershed.js?v=20261123"></script>
+  <script src="./tour.js?v=20261123"></script>
   <script>
     (function () {
       var data = window.NCHOE_DASHBOARD_DATA || {};

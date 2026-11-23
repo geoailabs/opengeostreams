@@ -94,6 +94,14 @@ def _style(figure, title, x_title="", y_title="", *, width=1000, height=550):
     return figure
 
 
+def _value_label(parameter, frame):
+    """Axis title for measured values: the parameter and its unit, e.g. ``BOD (mg/l)``."""
+    units = frame["Unit"].dropna().astype(str).str.strip() if not frame.empty else pd.Series(dtype=str)
+    unit = next((value for value in units if value and value != "-"), "")
+    name = parameter or "Value"
+    return f"{name} ({unit})" if unit else name
+
+
 def trend_figure(dataset, parameter=None, location=None):
     """Interactive parameter and precipitation timeline."""
     go = _go()
@@ -171,9 +179,8 @@ def trend_figure(dataset, parameter=None, location=None):
             f"Location: %{{customdata[0]}} | {parameter or 'Value'}: %{{y}} | "
             "Precipitation: %{customdata[4]}<extra></extra>"
         )
-    unit = next(iter(frame["Unit"].dropna().astype(str)), "") if not frame.empty else ""
     _style(figure, f"{parameter or 'Parameter'} and precipitation trend",
-           "Time", f"Value{f' ({unit})' if unit else ''}")
+           "Sampling date", _value_label(parameter, frame))
     if not frame.empty:
         bounds = frame["Date"].map(pipeline.parse_date_bounds)
         start = min(value[0] for value in bounds)
@@ -245,7 +252,8 @@ def distribution_figure(dataset, parameter=None, grouping="year", location=None)
             "Median: %{customdata[7]:.6g}<br>Q3: %{customdata[8]:.6g}<br>Max: %{customdata[9]:.6g}<extra></extra>"
         ),
     ))
-    _style(figure, f"{parameter or 'Parameter'} distribution by {grouping}", grouping.title(), "Value")
+    _style(figure, f"{parameter or 'Parameter'} distribution by {grouping}", grouping.title(),
+           _value_label(parameter, frame))
     figure.update_layout(meta={"boxplotStatistics": statistics})
     figure.update_xaxes(type="category", categoryorder="array", categoryarray=list(by_group))
     return figure
@@ -315,7 +323,7 @@ def stream_figure(dataset, parameter=None, *, channel=None, group_by_channel=Fal
         text=cell_labels,
         texttemplate="%{text}",
         colorscale="RdYlBu_r",
-        colorbar=dict(title="Value", thickness=22, len=0.78, x=1.02),
+        colorbar=dict(title=f"Annual mean {_value_label(parameter, frame)}", thickness=22, len=0.78, x=1.02),
         hovertemplate="Location: %{y}<br>Year: %{x}<br>Value: %{customdata}<extra></extra>",
     ))
     # Missing cells use a separate mask so grey never changes the value colour scale.
@@ -335,7 +343,7 @@ def stream_figure(dataset, parameter=None, *, channel=None, group_by_channel=Fal
     height = max(520, 75 + (len(table.index) * 42))
     _style(
         figure, f"{parameter or 'Parameter'} across the river",
-        "Year", "Location", width=1050, height=height,
+        "Year", "Station (upstream to downstream)" if order_meta else "Station", width=1050, height=height,
     )
     figure.update_xaxes(tickangle=0, tickmode="array", tickvals=list(table.columns))
     figure.update_yaxes(automargin=True)

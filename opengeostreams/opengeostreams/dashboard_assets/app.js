@@ -653,7 +653,6 @@
     } else if (kind === "distribution") {
       layout.yaxis.tickformat = ".4~g";
     } else if (kind === "stream" && heatmap) {
-      layout.yaxis.title.text = "";
       layout.yaxis.autorange = false;
       const [pageFirst, pageLast] = streamPageRange();
       layout.yaxis.range = [pageLast + 0.5, pageFirst - 0.5];
@@ -665,6 +664,8 @@
       const groups = figure.layout.meta?.streamGroups;
       const networkOrder = Boolean(channelView || groups);
       const stationOrder = elevationOrderActive && !networkOrder ? [...heatmap.y].sort(compareElevation) : heatmap.y;
+      layout.yaxis.title.text = networkOrder ? "Station (upstream to downstream)"
+        : elevationOrderActive ? "Station (highest to lowest elevation)" : "Station";
       const shortName = (name) => escapeHtml(String(name).length > 18 ? String(name).slice(0, 17) + "..." : String(name));
       layout.yaxis.categoryorder = "array";
       layout.yaxis.categoryarray = stationOrder;
@@ -724,7 +725,8 @@
       heatmap.textfont = {size: 10};
       if (heatmap.x.length > 8) heatmap.texttemplate = "";
       heatmap.colorbar = {...heatmap.colorbar, orientation: "h", x: 0.5, xanchor: "center", y: -0.27,
-        yanchor: "top", len: 1, thickness: 10, title: {text: "Value", side: "bottom", font: {size: 10, color: theme.muted}}, nticks: 3};
+        yanchor: "top", len: 1, thickness: 10, nticks: 3,
+        title: {text: heatmap.colorbar?.title?.text || "Annual mean value", side: "bottom", font: {size: 10, color: theme.muted}}};
     }
     return layout;
   }
@@ -1003,6 +1005,7 @@
         fill: isStp ? "#d99d06" : "#0f766e",
         ring: readCssColour("--marker-ring", "#ffffff"),
         active: false,
+        stp: isStp,
       }),
       riseOnHover: true,
     }).addTo(map);
@@ -1957,19 +1960,24 @@
     refreshParameterScale();
   }
 
-  // Teardrop map pin (Google Maps style) whose tip sits exactly on the station.
-  function stationPinIcon({ fill, ring, active }) {
+  // Map pins whose tip sits exactly on the station: a round teardrop for sampling
+  // stations and a square-headed pin for sewage treatment plants (STPs).
+  function stationPinIcon({ fill, ring, active, stp = false }) {
+    const shape = stp ? "stp" : "station";
+    const outline = stp
+      ? "M4.4 1.4h15.2a3 3 0 0 1 3 3v15.4a3 3 0 0 1-3 3h-4.5l-2.4 8.6a.8.8 0 0 1-1.4 0l-2.4-8.6H4.4a3 3 0 0 1-3-3V4.4a3 3 0 0 1 3-3z"
+      : "M12 1.2C6 1.2 1.2 6 1.2 12c0 7.6 9 18.4 10.1 19.7a.9.9 0 0 0 1.4 0C13.8 30.4 22.8 19.6 22.8 12 22.8 6 18 1.2 12 1.2z";
+    const centre = stp ? `<rect x="8" y="8" width="8" height="8" rx="1" fill="${ring}"/>` : `<circle cx="12" cy="12" r="4.2" fill="${ring}"/>`;
     const width = active ? 24 : 16;
     const height = Math.round(width * 1.4);
     const svg = [
       `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 24 34" aria-hidden="true">`,
-      `<path d="M12 1.2C6 1.2 1.2 6 1.2 12c0 7.6 9 18.4 10.1 19.7a.9.9 0 0 0 1.4 0C13.8 30.4 22.8 19.6 22.8 12 22.8 6 18 1.2 12 1.2z"`,
-      ` fill="${fill}" stroke="${ring}" stroke-width="${active ? 2 : 1.6}"/>`,
-      `<circle cx="12" cy="12" r="4.2" fill="${ring}"/>`,
+      `<path d="${outline}" fill="${fill}" stroke="${ring}" stroke-width="${active ? 2 : 1.6}"/>`,
+      centre,
       "</svg>",
     ].join("");
     return L.divIcon({
-      className: `station-pin${active ? " is-active" : ""}`,
+      className: `station-pin station-pin-${shape}${active ? " is-active" : ""}`,
       html: svg,
       iconSize: [width, height],
       iconAnchor: [width / 2, height],
@@ -1988,10 +1996,11 @@
       const suitability = cachedSuitability(locationName);
       const style = {
         fill: SUITABILITY_COLORS[suitability.status] || SUITABILITY_COLORS.unknown,
-        ring: isActive ? activeRing : (isStp ? "#92400e" : ring),
+        ring: isActive ? activeRing : ring,
         active: isActive,
+        stp: isStp,
       };
-      const key = `${style.fill}|${style.ring}|${style.active}`;
+      const key = `${style.fill}|${style.ring}|${style.active}|${style.stp}`;
       if (marker._ogsStyleKey !== key) {
         marker._ogsStyleKey = key;
         marker.setIcon(stationPinIcon(style));
