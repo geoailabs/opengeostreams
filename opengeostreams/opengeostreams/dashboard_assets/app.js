@@ -1961,13 +1961,13 @@
   }
 
   // Map pins whose tip sits exactly on the station: a round teardrop for sampling
-  // stations and a square-headed pin for sewage treatment plants (STPs).
+  // stations and a diamond pin for sewage treatment plants (STPs).
   function stationPinIcon({ fill, ring, active, stp = false }) {
     const shape = stp ? "stp" : "station";
     const outline = stp
-      ? "M4.4 1.4h15.2a3 3 0 0 1 3 3v15.4a3 3 0 0 1-3 3h-4.5l-2.4 8.6a.8.8 0 0 1-1.4 0l-2.4-8.6H4.4a3 3 0 0 1-3-3V4.4a3 3 0 0 1 3-3z"
+      ? "M12 1.6Q13 1.6 13.8 2.4L21.6 10.2Q23 11.6 21.6 13L13.4 30.6Q12 32.6 10.6 30.6L2.4 13Q1 11.6 2.4 10.2L10.2 2.4Q11 1.6 12 1.6z"
       : "M12 1.2C6 1.2 1.2 6 1.2 12c0 7.6 9 18.4 10.1 19.7a.9.9 0 0 0 1.4 0C13.8 30.4 22.8 19.6 22.8 12 22.8 6 18 1.2 12 1.2z";
-    const centre = stp ? `<rect x="8" y="8" width="8" height="8" rx="1" fill="${ring}"/>` : `<circle cx="12" cy="12" r="4.2" fill="${ring}"/>`;
+    const centre = stp ? `<circle cx="12" cy="11.6" r="3.6" fill="${ring}"/>` : `<circle cx="12" cy="12" r="4.2" fill="${ring}"/>`;
     const width = active ? 24 : 16;
     const height = Math.round(width * 1.4);
     const svg = [
