@@ -54,7 +54,7 @@
     {
       target: ".suitability-panel",
       title: "Use-case screening",
-      text: "Choose a use: human consumption, agriculture, aquatic life or bathing. " +
+      text: "Choose a use: agriculture, aquatic life or bathing. " +
         "Each station is checked against that use's limits, and the pins change colour to match.",
     },
     {

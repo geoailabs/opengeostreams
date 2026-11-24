@@ -19,7 +19,7 @@
     selectedPeriod: "annual",
     selectedYear: "all",
     baseMap: "osm",
-    selectedUseCase: "human_consumption",
+    selectedUseCase: "agriculture",
     boxplotGrouping: "year",
     // Stream rows: "all" (A-Z), "grouped" (by drain/river) or a channel id.
     streamChannel: "all",

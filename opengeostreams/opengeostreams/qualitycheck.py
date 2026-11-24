@@ -1,7 +1,7 @@
 """Rule-based water quality screening: station fitness per use case and parameter safety scales.
 
-The dashboard shows each station as pass / caution / fail for human consumption,
-agriculture, aquatic life or bathing, plus a safety scale for the selected parameter.
+The dashboard shows each station as pass / caution / fail for agriculture, aquatic
+life or bathing, plus a safety scale for the selected parameter.
 All of those rules and thresholds live here; ``build_quality_payload`` evaluates every
 station sample once so the browser only has to pick the sample matching its filters.
 
@@ -16,7 +16,6 @@ import re
 from typing import Any, Iterable
 
 USE_CASES = [
-    {"key": "human_consumption", "label": "Human Consumption"},
     {"key": "agriculture", "label": "Agriculture"},
     {"key": "aquatic_life", "label": "Aquatic Life"},
     {"key": "bathing", "label": "Bathing"},
@@ -29,19 +28,6 @@ STATUS_LABELS = {"safe": "Pass", "caution": "Caution", "unsafe": "Fail", "unknow
 # ignoring a trailing "(max)"/"(min)"). "confirmed" names feed the rules directly; "proxy" names are
 # only near matches, so they are reported in the coverage but not screened.
 SCREENING_PARAMETER_SPECS: dict[str, list[dict[str, Any]]] = {
-    "human_consumption": [
-        {"key": "pH", "confirmed": ["pH"]},
-        {"key": "turbidity_ntu", "confirmed": ["Turbidity"]},
-        {"key": "tds_mg_l", "confirmed": ["TDS"]},
-        {"key": "nitrate_mg_l", "confirmed": [], "proxy": ["NO3-N", "Nitrate"]},
-        {"key": "fluoride_mg_l", "confirmed": ["Fluoride"]},
-        {"key": "chloride_mg_l", "confirmed": ["Chloride"]},
-        {"key": "sulphate_mg_l", "confirmed": ["Sulphate", "SO4"]},
-        {"key": "hardness_mg_l_as_caco3", "confirmed": ["TH as CaCO3"]},
-        {"key": "alkalinity_mg_l_as_caco3", "confirmed": ["Total alkalinity as CaCO3"], "proxy": ["P-Alkalinity"]},
-        {"key": "total_coliform_mpn_100ml", "confirmed": ["Total Coliform", "T-Coliform"]},
-        {"key": "e_coli_present", "confirmed": []},
-    ],
     "agriculture": [
         {"key": "pH", "confirmed": ["pH"]},
         {"key": "ec_us_cm", "confirmed": [], "proxy": ["Conductivity"]},
@@ -76,7 +62,6 @@ SCREENING_PARAMETER_SPECS: dict[str, list[dict[str, Any]]] = {
 
 # Minimum checks needed before a station can be classified at all.
 CORE_KEYS_BY_USE_CASE = {
-    "human_consumption": ["pH", "turbidity_ntu", "tds_mg_l", "nitrate_mg_l", "fluoride_mg_l", "total_coliform_mpn_100ml", "e_coli_present"],
     "agriculture": ["pH", "ec_us_cm", "sar", "boron_mg_l"],
     "aquatic_life": ["pH", "dissolved_oxygen_mg_l", "free_ammonia_mg_l_as_n"],
     "bathing": ["pH", "dissolved_oxygen_mg_l", "bod_mg_l", "total_coliform_mpn_100ml", "fecal_coliform_mpn_100ml", "e_coli_present"],
@@ -85,13 +70,8 @@ CORE_KEYS_BY_USE_CASE = {
 INPUT_LABELS = {
     "pH": "pH",
     "turbidity_ntu": "Turbidity",
-    "tds_mg_l": "TDS",
     "nitrate_mg_l": "Nitrate",
-    "fluoride_mg_l": "Fluoride",
     "chloride_mg_l": "Chloride",
-    "sulphate_mg_l": "Sulphate",
-    "hardness_mg_l_as_caco3": "Hardness",
-    "alkalinity_mg_l_as_caco3": "Alkalinity",
     "total_coliform_mpn_100ml": "Total coliform",
     "fecal_coliform_mpn_100ml": "Fecal coliform",
     "e_coli_present": "E. coli",
@@ -112,18 +92,6 @@ INPUT_LABELS = {
 # "max" is safe up to safeMax, "min" is safe from safeMin upward. domainMin/domainMax fix the
 # drawn axis; without them the dashboard sizes the axis around the threshold and the value.
 PARAMETER_SCALE_DEFINITIONS: dict[str, dict[str, dict[str, Any]]] = {
-    "human_consumption": {
-        "ph": {"label": "pH", "type": "range", "safeMin": 6.5, "safeMax": 8.5, "domainMin": 0, "domainMax": 14},
-        "turbidity": {"label": "Turbidity", "type": "max", "safeMax": 1.0, "unit": "NTU"},
-        "tds": {"label": "TDS", "type": "max", "safeMax": 500, "unit": "mg/L"},
-        "nitrate": {"label": "Nitrate", "type": "max", "safeMax": 45, "unit": "mg/L"},
-        "fluoride": {"label": "Fluoride", "type": "max", "safeMax": 1.0, "unit": "mg/L"},
-        "chloride": {"label": "Chloride", "type": "max", "safeMax": 250, "unit": "mg/L"},
-        "sulphate": {"label": "Sulphate", "type": "max", "safeMax": 200, "unit": "mg/L"},
-        "hardness": {"label": "Hardness", "type": "max", "safeMax": 200, "unit": "mg/L as CaCO3"},
-        "alkalinity": {"label": "Alkalinity", "type": "max", "safeMax": 200, "unit": "mg/L as CaCO3"},
-        "total_coliform": {"label": "Total Coliform", "type": "max", "safeMax": 0, "unit": "MPN/100mL", "domainMin": 0, "domainMax": 1000},
-    },
     "agriculture": {
         "ph": {"label": "pH", "type": "range", "safeMin": 6.0, "safeMax": 8.5, "domainMin": 0, "domainMax": 14},
         "conductivity": {"label": "Conductivity", "type": "max", "safeMax": 2250, "unit": "uS/cm"},
@@ -239,32 +207,6 @@ def _result(use_case, core_reasons, extended_reasons, checked):
     }
 
 
-def fit_for_human_consumption(pH=None, turbidity_ntu=None, tds_mg_l=None, nitrate_mg_l=None,
-                              fluoride_mg_l=None, chloride_mg_l=None, sulphate_mg_l=None,
-                              hardness_mg_l_as_caco3=None, alkalinity_mg_l_as_caco3=None,
-                              total_coliform_mpn_100ml=None, e_coli_present=None, strict=True):
-    """Drinking-water screening. ``strict`` uses the tighter turbidity and fluoride limits."""
-    checked = dict(locals())
-    core, extended = [], []
-    turbidity_limit = 1.0 if strict else 5.0
-    fluoride_limit = 1.0 if strict else 1.5
-
-    if pH is not None and not 6.5 <= pH <= 8.5: core.append(f"pH {_num(pH)} outside 6.5-8.5")
-    if turbidity_ntu is not None and turbidity_ntu > turbidity_limit: core.append(f"Turbidity {_num(turbidity_ntu)} NTU exceeds {_num(turbidity_limit)} NTU")
-    if tds_mg_l is not None and tds_mg_l > 500: core.append(f"TDS {_num(tds_mg_l)} mg/L exceeds 500 mg/L desirable limit")
-    if nitrate_mg_l is not None and nitrate_mg_l > 45: core.append(f"Nitrate {_num(nitrate_mg_l)} mg/L exceeds 45 mg/L")
-    if fluoride_mg_l is not None and fluoride_mg_l > fluoride_limit: core.append(f"Fluoride {_num(fluoride_mg_l)} mg/L exceeds {_num(fluoride_limit)} mg/L")
-    if total_coliform_mpn_100ml is not None and total_coliform_mpn_100ml > 0: core.append(f"Total coliform {_num(total_coliform_mpn_100ml)} MPN/100mL should be 0")
-    if e_coli_present is True: core.append("E. coli detected")
-
-    if chloride_mg_l is not None and chloride_mg_l > 250: extended.append(f"Chloride {_num(chloride_mg_l)} mg/L exceeds 250 mg/L desirable limit")
-    if sulphate_mg_l is not None and sulphate_mg_l > 200: extended.append(f"Sulphate {_num(sulphate_mg_l)} mg/L exceeds 200 mg/L desirable limit")
-    if hardness_mg_l_as_caco3 is not None and hardness_mg_l_as_caco3 > 200: extended.append(f"Hardness {_num(hardness_mg_l_as_caco3)} mg/L as CaCO3 exceeds 200 mg/L desirable limit")
-    if alkalinity_mg_l_as_caco3 is not None and alkalinity_mg_l_as_caco3 > 200: extended.append(f"Alkalinity {_num(alkalinity_mg_l_as_caco3)} mg/L as CaCO3 exceeds 200 mg/L desirable limit")
-
-    return _result("human_consumption", core, extended, checked)
-
-
 def fit_for_agriculture(pH=None, ec_us_cm=None, sar=None, boron_mg_l=None, chloride_mg_l=None,
                         nitrate_mg_l=None, bicarbonate_mg_l=None, carbonate_mg_l=None, rsc_meq_l=None):
     """Irrigation screening (salinity, sodicity, boron, alkalinity hazard)."""
@@ -327,7 +269,6 @@ def fit_for_bathing(pH=None, dissolved_oxygen_mg_l=None, bod_mg_l=None, total_co
 
 
 RULES = {
-    "human_consumption": fit_for_human_consumption,
     "agriculture": fit_for_agriculture,
     "aquatic_life": fit_for_aquatic_life,
     "bathing": fit_for_bathing,

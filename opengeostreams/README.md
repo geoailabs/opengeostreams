@@ -140,8 +140,8 @@ The import summary counts empty source cells (with a per-column breakdown), not 
 
 ## Quality check engine
 
-`opengeostreams/qualitycheck.py` holds the suitability rules (human consumption,
-agriculture, aquatic life, bathing) and the parameter safety-scale thresholds.
+`opengeostreams/qualitycheck.py` holds the suitability rules (agriculture,
+aquatic life, bathing) and the parameter safety-scale thresholds.
 The dashboard payload carries its results under `quality`; the browser only
 picks the latest sample for the active year/month filter and draws the scale.
 

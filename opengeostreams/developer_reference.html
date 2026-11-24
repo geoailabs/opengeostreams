@@ -451,7 +451,7 @@ python -m opengeostreams.server     # standalone
 
   <!-- qualitycheck -->
   <div class="module-head" id="m-qualitycheck"><h3>qualitycheck.py</h3><span class="tag py">Python</span><span class="loc">466 lines · suitability engine</span></div>
-  <p>The rule-based screening engine. It decides whether a station's sample is fit for <strong>human consumption</strong>, <strong>agriculture</strong>, <strong>aquatic life</strong> or <strong>bathing</strong>, and holds the thresholds behind the parameter safety scale. It has no dependencies beyond the standard library and works on the dashboard's <code>records</code>.</p>
+  <p>The rule-based screening engine. It decides whether a station's sample is fit for <strong>agriculture</strong>, <strong>aquatic life</strong> or <strong>bathing</strong>, and holds the thresholds behind the parameter safety scale. It has no dependencies beyond the standard library and works on the dashboard's <code>records</code>.</p>
   <div class="feeds"><span>Use-case screening</span><span>Marker colours</span><span>Station popup</span><span>Parameter scale</span></div>
 
   <h4>How a sample is screened</h4>
@@ -464,7 +464,7 @@ python -m opengeostreams.server     # standalone
   <h4>Functions and tables</h4>
   <div class="table-wrap"><table>
     <tr><th>Name</th><th>What it does</th></tr>
-    <tr><td><code>fit_for_human_consumption</code>, <code>fit_for_agriculture</code>, <code>fit_for_aquatic_life</code>, <code>fit_for_bathing</code></td><td>The rule sets. Keyword arguments are readings such as <code>pH</code>, <code>bod_mg_l</code>, <code>fecal_coliform_mpn_100ml</code>; missing ones are skipped. Each returns <code>fit_core</code>, <code>fit_extended</code>, <code>core_reasons</code>, <code>extended_reasons</code>, <code>checked_values</code>.</td></tr>
+    <tr><td><code>fit_for_agriculture</code>, <code>fit_for_aquatic_life</code>, <code>fit_for_bathing</code></td><td>The rule sets. Keyword arguments are readings such as <code>pH</code>, <code>bod_mg_l</code>, <code>fecal_coliform_mpn_100ml</code>; missing ones are skipped. Each returns <code>fit_core</code>, <code>fit_extended</code>, <code>core_reasons</code>, <code>extended_reasons</code>, <code>checked_values</code>.</td></tr>
     <tr><td><code>screen(use_case, values)</code></td><td>Dispatches a dict of inputs to the right rule set (<code>RULES</code>).</td></tr>
     <tr><td><code>evaluate_sample(records, use_case)</code></td><td>One station sample → <code>status</code>, <code>label</code>, <code>reasons</code>, <code>coverage</code> (confirmed / proxy / missing inputs).</td></tr>
     <tr><td><code>screen_stations(records, use_case, year=None, month=None)</code></td><td>Screens each station's latest sample in the period, the same choice the dashboard makes.</td></tr>

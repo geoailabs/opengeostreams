@@ -1172,11 +1172,12 @@ class QualityCheckTests(unittest.TestCase):
 
     def test_sample_matching_prefers_plain_reading_and_reports_proxies(self):
         from opengeostreams.opengeostreams import qualitycheck as qc
-        records = [self._record("pH (max)", 9.5), self._record("pH", 7.0), self._record("NO3-N", 60)]
-        result = qc.evaluate_sample(records, "human_consumption")
+        records = [self._record("pH (max)", 9.5), self._record("pH", 7.0), self._record("NH3-N", 60)]
+        result = qc.evaluate_sample(records, "aquatic_life")
         self.assertEqual(result["status"], "safe")
         self.assertIn("pH via pH", result["coverage"]["confirmed"])
-        self.assertIn("Nitrate via NO3-N", result["coverage"]["proxy"])
+        self.assertIn("Free ammonia via NH3-N", result["coverage"]["proxy"])
+        self.assertNotIn("human_consumption", qc.USE_CASE_KEYS)
 
     def test_scales_and_latest_sample(self):
         from opengeostreams.opengeostreams import qualitycheck as qc
@@ -1196,7 +1197,7 @@ class QualityCheckTests(unittest.TestCase):
             "Parameter": ["pH", "DO (min)"], "Value": ["9.1", "6"], "Location": ["A", "A"],
             "Latitude": [30.7, 30.7], "Longitude": [76.7, 76.7], "Date": ["01-03-2024", "01-03-2024"]}))
         quality = dataset._dashboard_data["quality"]
-        self.assertEqual([item["key"] for item in quality["useCases"]][0], "human_consumption")
+        self.assertEqual([item["key"] for item in quality["useCases"]], ["agriculture", "aquatic_life", "bathing"])
         self.assertEqual(quality["scaleKeys"]["DO"], "do")
         (sample,) = quality["samples"]["A"].values()
         self.assertEqual(sample["bathing"]["status"], "unsafe")
